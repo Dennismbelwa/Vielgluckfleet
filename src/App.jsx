@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Car, Users, Calendar, DollarSign, Wrench, ClipboardCheck, FileText,
   BarChart3, ChevronRight, Plus, Search, Filter, Eye, Edit, Trash2,
@@ -120,6 +120,37 @@ const Table = ({cols, data, onRow}) => (
   </>
 );
 
+// ─── SIGNATURE PAD ────────────────────────────────────────────
+const SignaturePad = ({ label, value, onChange }) => {
+  const canvasRef = useRef(null);
+  const drawing = useRef(false);
+  const getPos = (e, canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = canvas.width / rect.width, sy = canvas.height / rect.height;
+    const src = e.touches ? e.touches[0] : e;
+    return { x: (src.clientX - rect.left) * sx, y: (src.clientY - rect.top) * sy };
+  };
+  const start = e => { e.preventDefault(); drawing.current = true; const c = canvasRef.current; const ctx = c.getContext('2d'); const p = getPos(e,c); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
+  const draw  = e => { if (!drawing.current) return; e.preventDefault(); const c = canvasRef.current; const ctx = c.getContext('2d'); ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1a1a2e'; const p = getPos(e,c); ctx.lineTo(p.x,p.y); ctx.stroke(); };
+  const stop  = () => { if (!drawing.current) return; drawing.current = false; const c = canvasRef.current; const d = c.getContext('2d').getImageData(0,0,c.width,c.height).data; if ([...d].some((v,i)=>i%4!==3&&v<240)) onChange(c.toDataURL()); };
+  const clear = () => { const c = canvasRef.current; c.getContext('2d').clearRect(0,0,c.width,c.height); onChange(null); };
+  return (
+    <div>
+      <p className="text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">{label}</p>
+      <div className={`relative rounded-xl overflow-hidden border-2 ${value?"border-green-400 bg-green-50/20":"border-dashed border-gray-300 bg-gray-50/40"}`}>
+        <canvas ref={canvasRef} width={700} height={160} className="w-full touch-none cursor-crosshair"
+          onMouseDown={start} onMouseMove={draw} onMouseUp={stop} onMouseLeave={stop}
+          onTouchStart={start} onTouchMove={draw} onTouchEnd={stop}/>
+        {!value && <p className="absolute inset-0 flex items-center justify-center text-sm text-gray-300 pointer-events-none select-none">Draw signature here</p>}
+      </div>
+      <div className="flex justify-between items-center mt-1.5">
+        <button onClick={clear} className="text-xs text-gray-400 hover:text-red-500 transition-colors">Clear</button>
+        {value && <span className="text-xs text-green-600 font-semibold flex items-center gap-1"><CheckCircle2 size={12}/>Signed</span>}
+      </div>
+    </div>
+  );
+};
+
 // ─── MAIN APP ─────────────────────────────────────────────────
 export default function App() {
   const [page, setPage] = useState("dashboard");
@@ -136,6 +167,9 @@ export default function App() {
   const [activeUser, setActiveUser] = useState(null);
   const [loginCreds, setLoginCreds] = useState({ username:"", password:"" });
   const [loginError, setLoginError] = useState("");
+  const [contractData, setContractData] = useState(null);
+  const [customerSig, setCustomerSig] = useState(null);
+  const [agentSig, setAgentSig] = useState(null);
   const [loginShowPw, setLoginShowPw] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
@@ -468,6 +502,97 @@ export default function App() {
     const w = window.open('','_blank','width=900,height=700');
     w.document.write(html); w.document.close(); w.focus();
     setTimeout(()=>{ w.print(); }, 400);
+  };
+
+  // ─── CONTRACT HELPERS ─────────────────────────────────────────
+  const openContract = (booking, inspectionData, onSigned) => {
+    const customer = customers.find(c=>c.id===booking.customerId) || {};
+    const vehicle  = vehicles.find(v=>v.id===booking.vehicleId) || {};
+    setCustomerSig(null);
+    setAgentSig(null);
+    setContractData({ booking, customer, vehicle, inspection: inspectionData || {}, _onSigned: onSigned });
+  };
+
+  const printContract = () => {
+    if (!contractData) return;
+    const { booking, customer, vehicle, inspection } = contractData;
+    const sigBlock = (label, sig) => sig
+      ? `<div><p style="font-size:11px;color:#888;margin-bottom:4px">${label}</p><img src="${sig}" style="height:60px;border-bottom:1px solid #333;display:block"/></div>`
+      : `<div><p style="font-size:11px;color:#888;margin-bottom:4px">${label}</p><div style="height:60px;border-bottom:1px solid #333"></div></div>`;
+    const html = `<!DOCTYPE html><html><head><title>Rental Agreement — ${booking?.id}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:Arial,sans-serif;color:#1a1a2e;padding:30px;font-size:12px;line-height:1.6}
+      .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #e2725b;padding-bottom:14px;margin-bottom:20px}
+      .logo{font-size:22px;font-weight:900;color:#e2725b}.sub{font-size:10px;color:#888;letter-spacing:2px}
+      .ref{text-align:right}.ref p{font-size:11px;color:#888}.ref strong{font-size:14px;color:#1a1a2e}
+      .section{margin-bottom:18px}.section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#e2725b;border-bottom:1px solid #f0f0f0;padding-bottom:4px;margin-bottom:10px}
+      .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+      .field p:first-child{font-size:10px;color:#888}.field p:last-child{font-size:12px;font-weight:600}
+      .terms{background:#f9f9f9;border-radius:6px;padding:12px;font-size:10px;color:#555;line-height:1.7}
+      .terms li{margin-bottom:4px}
+      .sigs{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:20px}
+      @media print{body{padding:15px}}
+    </style></head><body>
+    <div class="header">
+      <div><div class="logo">Viel Gl&#xFC;ck</div><div class="sub">FLEET MANAGER &middot; BOTSWANA</div><div style="margin-top:6px;font-size:11px;color:#555">Car Hire Rental Agreement</div></div>
+      <div class="ref"><p>Agreement No.</p><strong>${booking?.id||'—'}</strong><p style="margin-top:4px">Date: ${today}</p></div>
+    </div>
+    <div class="section"><div class="section-title">Renter Information</div>
+      <div class="grid2">
+        <div class="field"><p>Full Name</p><p>${customer?.name||'—'}</p></div>
+        <div class="field"><p>Phone</p><p>${customer?.phone||'—'}</p></div>
+        <div class="field"><p>ID / Passport No.</p><p>${customer?.idNumber||'—'}</p></div>
+        <div class="field"><p>Driver License No.</p><p>${customer?.license||'—'}</p></div>
+        <div class="field"><p>Email</p><p>${customer?.email||'—'}</p></div>
+        <div class="field"><p>Emergency Contact</p><p>${customer?.emergency||'—'}</p></div>
+        <div class="field"><p>Next of Kin</p><p>${customer?.nextOfKinName||'—'}</p></div>
+        <div class="field"><p>Next of Kin Contact</p><p>${customer?.nextOfKinContact||'—'}</p></div>
+      </div>
+    </div>
+    <div class="section"><div class="section-title">Vehicle Details</div>
+      <div class="grid2">
+        <div class="field"><p>Vehicle</p><p>${vehicle?.make||''} ${vehicle?.model||''} ${vehicle?.year||''}</p></div>
+        <div class="field"><p>Registration</p><p>${vehicle?.reg||'—'}</p></div>
+        <div class="field"><p>VIN</p><p>${vehicle?.vin||'—'}</p></div>
+        <div class="field"><p>Color</p><p>${vehicle?.color||'—'}</p></div>
+        <div class="field"><p>Odometer at Pick-up</p><p>${inspection?.mileage||'—'} km</p></div>
+        <div class="field"><p>Fuel Level at Pick-up</p><p>${inspection?.fuel||'—'}</p></div>
+      </div>
+    </div>
+    <div class="section"><div class="section-title">Rental Terms</div>
+      <div class="grid2">
+        <div class="field"><p>Pick-up Date</p><p>${booking?.pickup||'—'}</p></div>
+        <div class="field"><p>Return Date</p><p>${booking?.returnDate||booking?.return||'—'}</p></div>
+        <div class="field"><p>Daily Rate</p><p>${fmt(booking?.rate)}</p></div>
+        <div class="field"><p>Total Amount</p><p>${fmt(booking?.total)}</p></div>
+        <div class="field"><p>Deposit Paid</p><p>${fmt(booking?.deposit)}</p></div>
+        <div class="field"><p>Trip Type</p><p>${booking?.tripType||'Local'}</p></div>
+      </div>
+    </div>
+    ${inspection?.damages ? `<div class="section"><div class="section-title">Pre-Rental Inspection Notes</div><p style="font-size:12px;color:#555">${inspection.damages}</p></div>` : ''}
+    <div class="section"><div class="section-title">Terms &amp; Conditions</div>
+      <div class="terms"><ol>
+        <li>The renter is responsible for the vehicle during the rental period and must return it in the same condition.</li>
+        <li>Any damage not noted at the time of pick-up will be charged to the renter.</li>
+        <li>The renter must have a valid driver's license for the duration of the rental.</li>
+        <li>Smoking, pets, and off-road driving are strictly prohibited unless prior written consent is given.</li>
+        <li>The renter is liable for all traffic fines and parking violations incurred during the rental period.</li>
+        <li>Fuel must be returned at the same level as at pick-up or a refuelling fee will apply.</li>
+        <li>Late returns beyond the agreed date will be charged at the daily rate plus a ${fmt(150)} late fee per day.</li>
+        <li>The vehicle must not be driven outside Botswana without prior written authorisation.</li>
+        <li>Viel Glück Car Hire reserves the right to recover the vehicle if terms are breached.</li>
+        <li>The renter confirms they have inspected the vehicle and agree to the above terms.</li>
+      </ol></div>
+    </div>
+    <div class="sigs">
+      ${sigBlock('Customer Signature &amp; Date', customerSig)}
+      ${sigBlock('Agent Signature &amp; Date', agentSig)}
+    </div>
+    </body></html>`;
+    const w = window.open('','_blank','width=900,height=800');
+    w.document.write(html); w.document.close(); w.focus();
+    setTimeout(()=>{ w.print(); }, 500);
   };
 
   // ─── MODAL SAVE FUNCTIONS ────────────────────────────────────
@@ -1222,10 +1347,18 @@ export default function App() {
                 </Field>
               </div>
               <div className="sm:col-span-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={co.signature} onChange={e=>setCo({...co,signature:e.target.checked})} className="accent-orange-500 w-4 h-4"/>
-                  <span className="text-sm text-gray-700">Customer has signed the rental agreement</span>
-                </label>
+                <div className={`p-4 rounded-xl border-2 transition-all ${co.signature ? "border-green-300 bg-green-50/50" : "border-orange-200 bg-orange-50/30"}`}>
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800">Rental Agreement & Signature</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{co.signature ? "Contract signed — ready to complete check-out" : "Generate contract for customer to sign before handover"}</p>
+                    </div>
+                    {co.signature
+                      ? <span className="flex items-center gap-1.5 text-sm font-semibold text-green-600"><CheckCircle2 size={16}/>Signed</span>
+                      : <Btn onClick={()=>openContract(selected, co, ()=>setCo(prev=>({...prev,signature:true})))}><PenLine size={14} className="mr-1.5"/>Generate Contract</Btn>
+                    }
+                  </div>
+                </div>
               </div>
               <div className="sm:col-span-2 flex justify-end pt-3 border-t border-gray-100">
                 <Btn onClick={processCheckOut} className={`${!co.signature||!co.mileage?"opacity-50 pointer-events-none":""}`}>
@@ -1849,6 +1982,151 @@ export default function App() {
               </div>
             </div>
           </Modal>
+        )}
+
+        {/* ── CONTRACT MODAL ── */}
+        {contractData && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center overflow-y-auto p-3 sm:p-6">
+            <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl my-4">
+              {/* Header */}
+              <div className="flex items-start justify-between p-6 border-b border-gray-100">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{background:"linear-gradient(135deg,#e2725b,#d4a574)",boxShadow:"0 4px 12px rgba(226,114,91,0.3)"}}>
+                      <FileText size={18} color="#fff"/>
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-gray-900" style={{fontFamily:"'Outfit',sans-serif"}}>Rental Agreement</h2>
+                      <p className="text-xs text-gray-400">{contractData.booking?.id} · {today}</p>
+                    </div>
+                  </div>
+                </div>
+                <button onClick={()=>setContractData(null)} className="p-2 rounded-xl hover:bg-gray-100 transition-colors"><X size={18} className="text-gray-400"/></button>
+              </div>
+
+              <div className="p-6 space-y-6 overflow-y-auto max-h-[75vh]">
+                {/* Renter */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-3">Renter Information</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {[
+                      ["Full Name", contractData.customer?.name],
+                      ["Phone", contractData.customer?.phone],
+                      ["Email", contractData.customer?.email],
+                      ["ID / Passport", contractData.customer?.idNumber],
+                      ["Driver License", contractData.customer?.license],
+                      ["Emergency Contact", contractData.customer?.emergency],
+                      ["Next of Kin", contractData.customer?.nextOfKinName],
+                      ["Next of Kin Contact", contractData.customer?.nextOfKinContact],
+                    ].map(([l,v])=>(
+                      <div key={l} className="bg-gray-50/70 rounded-xl p-3">
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">{l}</p>
+                        <p className="text-sm font-semibold text-gray-800 mt-0.5">{v||'—'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Vehicle */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-3">Vehicle Details</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {[
+                      ["Vehicle", `${contractData.vehicle?.make||''} ${contractData.vehicle?.model||''} ${contractData.vehicle?.year||''}`],
+                      ["Registration", contractData.vehicle?.reg],
+                      ["Color", contractData.vehicle?.color],
+                      ["VIN", contractData.vehicle?.vin],
+                      ["Odometer at Pick-up", `${contractData.inspection?.mileage||'—'} km`],
+                      ["Fuel Level", contractData.inspection?.fuel||'—'],
+                    ].map(([l,v])=>(
+                      <div key={l} className="bg-gray-50/70 rounded-xl p-3">
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">{l}</p>
+                        <p className="text-sm font-semibold text-gray-800 mt-0.5">{v||'—'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Rental Terms */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-3">Rental Terms</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {[
+                      ["Pick-up Date", contractData.booking?.pickup],
+                      ["Return Date", contractData.booking?.returnDate||contractData.booking?.return],
+                      ["Trip Type", contractData.booking?.tripType||'Local'],
+                      ["Daily Rate", fmt(contractData.booking?.rate)],
+                      ["Total Amount", fmt(contractData.booking?.total)],
+                      ["Deposit", fmt(contractData.booking?.deposit)],
+                    ].map(([l,v])=>(
+                      <div key={l} className="bg-gray-50/70 rounded-xl p-3">
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">{l}</p>
+                        <p className="text-sm font-semibold text-gray-800 mt-0.5">{v||'—'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Inspection Notes */}
+                {contractData.inspection?.damages && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-2">Pre-Rental Inspection Notes</p>
+                    <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-sm text-amber-800">{contractData.inspection.damages}</div>
+                  </div>
+                )}
+
+                {/* Terms */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-3">Terms & Conditions</p>
+                  <div className="bg-gray-50/70 rounded-xl p-4 text-xs text-gray-600 space-y-2 leading-relaxed">
+                    {[
+                      "The renter is responsible for the vehicle during the rental period and must return it in the same condition.",
+                      "Any damage not noted at pick-up will be charged to the renter at full repair cost.",
+                      "The renter must hold a valid driver's license for the entire rental period.",
+                      "Smoking, pets, and off-road driving are strictly prohibited without prior written consent.",
+                      "The renter is liable for all traffic fines and parking violations incurred during the rental.",
+                      "Fuel must be returned at the same level as pick-up or a refuelling fee applies.",
+                      "Late returns will be charged at the daily rate plus a late fee of BWP 150 per day.",
+                      "The vehicle must not cross into neighbouring countries without prior written authorisation from Viel Glück Car Hire.",
+                      "Viel Glück Car Hire reserves the right to recover the vehicle if any terms are breached.",
+                      "By signing, the renter confirms they have read, understood, and agree to all terms above.",
+                    ].map((t,i)=>(
+                      <div key={i} className="flex gap-2"><span className="text-orange-400 font-bold shrink-0">{i+1}.</span><span>{t}</span></div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Signatures */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-3">Signatures</p>
+                  <div className="grid sm:grid-cols-2 gap-5">
+                    <SignaturePad label={`Customer — ${contractData.customer?.name||''}`} value={customerSig} onChange={setCustomerSig}/>
+                    <SignaturePad label={`Agent — ${activeUser?.name||'Staff'}`} value={agentSig} onChange={setAgentSig}/>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer actions */}
+              <div className="p-5 border-t border-gray-100 flex flex-wrap gap-3 justify-between items-center">
+                <button onClick={printContract} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
+                  <Printer size={15}/>Print / Save PDF
+                </button>
+                <div className="flex gap-3">
+                  <button onClick={()=>setContractData(null)} className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-500 hover:bg-gray-50 transition-colors">Cancel</button>
+                  <button
+                    disabled={!customerSig || !agentSig}
+                    onClick={()=>{
+                      if(contractData._onSigned) contractData._onSigned();
+                      setContractData(null);
+                    }}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all ${customerSig&&agentSig?"shadow-lg hover:opacity-90":"opacity-40 cursor-not-allowed"}`}
+                    style={{background:"linear-gradient(135deg,#e2725b,#d4a574)"}}>
+                    <CheckCircle2 size={14} className="inline mr-1.5"/>Confirm & Sign Contract
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Bottom tab bar — mobile only */}
