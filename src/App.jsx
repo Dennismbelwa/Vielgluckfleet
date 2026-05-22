@@ -404,6 +404,76 @@ export default function App() {
     );
   };
 
+  // ─── PRINT HELPERS ────────────────────────────────────────────
+  const printReceipt = (p) => {
+    const booking = bookings.find(b=>b.id===p.bookingId);
+    const html = `<!DOCTYPE html><html><head><title>Receipt ${p.id}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:Arial,sans-serif;max-width:420px;margin:40px auto;color:#1a1a2e;padding:20px}
+      .header{text-align:center;border-bottom:3px solid #e2725b;padding-bottom:16px;margin-bottom:20px}
+      .logo{font-size:26px;font-weight:900;color:#e2725b}
+      .sub{font-size:10px;color:#888;letter-spacing:3px;margin-top:2px}
+      .badge{display:inline-block;background:#e2725b;color:#fff;font-size:11px;font-weight:700;padding:3px 12px;border-radius:20px;margin:10px 0 0}
+      .section{margin:14px 0}
+      .row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f0f0f0;font-size:13px}
+      .lbl{color:#888}.val{font-weight:600}
+      .total-row{display:flex;justify-content:space-between;margin-top:14px;padding-top:14px;border-top:2px solid #e2725b}
+      .total-val{font-size:22px;font-weight:900;color:#e2725b}
+      .footer{text-align:center;margin-top:24px;padding-top:16px;border-top:1px dashed #ddd;font-size:11px;color:#aaa;line-height:1.8}
+    </style></head><body>
+    <div class="header"><div class="logo">Viel Gl&#xFC;ck</div><div class="sub">FLEET MANAGER &middot; BOTSWANA</div><div class="badge">PAYMENT RECEIPT</div></div>
+    <div class="section">
+      <div class="row"><span class="lbl">Receipt No.</span><span class="val">${p.id}</span></div>
+      <div class="row"><span class="lbl">Date</span><span class="val">${p.date||today}</span></div>
+      <div class="row"><span class="lbl">Customer</span><span class="val">${p.customerName||'&mdash;'}</span></div>
+      <div class="row"><span class="lbl">Booking Ref.</span><span class="val">${p.bookingId||'&mdash;'}</span></div>
+      ${booking?`<div class="row"><span class="lbl">Vehicle</span><span class="val">${booking.vehicleReg||''}</span></div>`:''}
+      ${booking?`<div class="row"><span class="lbl">Rental Period</span><span class="val">${booking.pickup||''} &rarr; ${booking.returnDate||booking.return||''}</span></div>`:''}
+    </div>
+    <div class="section">
+      <div class="row"><span class="lbl">Payment Type</span><span class="val">${p.type||'&mdash;'}</span></div>
+      <div class="row"><span class="lbl">Method</span><span class="val">${p.method||'Cash'}</span></div>
+      <div class="row"><span class="lbl">Status</span><span class="val">${p.status||'Completed'}</span></div>
+    </div>
+    <div class="total-row"><span style="font-size:14px;font-weight:700">Amount Paid</span><span class="total-val">${fmt(p.amount)}</span></div>
+    <div class="footer">Thank you for choosing Viel Gl&#xFC;ck Car Hire<br>This is an official receipt &copy; ${new Date().getFullYear()} Viel Gl&#xFC;ck Car Hire &middot; Botswana</div>
+    </body></html>`;
+    const w = window.open('','_blank','width=480,height=700');
+    w.document.write(html); w.document.close(); w.focus();
+    setTimeout(()=>{ w.print(); }, 400);
+  };
+
+  const printMonthlyReport = (reportMonth, filteredPmts, totalRev, maintCost, util) => {
+    const rows = filteredPmts.map(p=>`<tr><td>${p.id}</td><td>${p.date||''}</td><td>${p.customerName||''}</td><td>${p.bookingId||''}</td><td>${p.type||''}</td><td>${p.method||''}</td><td style="text-align:right;font-weight:600">${fmt(p.amount)}</td></tr>`).join('');
+    const html = `<!DOCTYPE html><html><head><title>Report ${reportMonth}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;color:#1a1a2e;padding:30px;font-size:12px}
+      h1{font-size:20px;color:#e2725b;margin-bottom:4px}.sub{color:#888;font-size:11px;margin-bottom:20px}
+      .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px}
+      .stat{background:#f8f8f8;border-radius:8px;padding:10px;text-align:center}
+      .stat-val{font-size:16px;font-weight:800;color:#e2725b}.stat-lbl{font-size:10px;color:#888;margin-top:2px}
+      table{width:100%;border-collapse:collapse}th{background:#1a1a2e;color:#fff;padding:7px 8px;text-align:left;font-size:10px}
+      td{padding:6px 8px;border-bottom:1px solid #f0f0f0;font-size:11px}tr:nth-child(even){background:#fafafa}
+      .footer{margin-top:18px;text-align:center;font-size:10px;color:#aaa}
+    </style></head><body>
+    <h1>Viel Gl&#xFC;ck Fleet Manager</h1>
+    <div class="sub">Monthly Payments Report &middot; ${reportMonth} &middot; Printed ${today}</div>
+    <div class="stats">
+      <div class="stat"><div class="stat-val">${fmt(totalRev)}</div><div class="stat-lbl">Total Revenue</div></div>
+      <div class="stat"><div class="stat-val">${fmt(maintCost)}</div><div class="stat-lbl">Maint. Costs</div></div>
+      <div class="stat"><div class="stat-val">${util}%</div><div class="stat-lbl">Utilization</div></div>
+      <div class="stat"><div class="stat-val">${filteredPmts.length}</div><div class="stat-lbl">Transactions</div></div>
+    </div>
+    <table><thead><tr><th>ID</th><th>Date</th><th>Customer</th><th>Booking</th><th>Type</th><th>Method</th><th>Amount</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="7" style="text-align:center;color:#aaa;padding:20px">No payments this month</td></tr>'}</tbody></table>
+    <div class="footer">&copy; ${new Date().getFullYear()} Viel Gl&#xFC;ck Car Hire &middot; Botswana</div>
+    </body></html>`;
+    const w = window.open('','_blank','width=900,height=700');
+    w.document.write(html); w.document.close(); w.focus();
+    setTimeout(()=>{ w.print(); }, 400);
+  };
+
   // ─── MODAL SAVE FUNCTIONS ────────────────────────────────────
   const saveVehicle = async () => {
     if (!form) return;
@@ -1406,6 +1476,12 @@ export default function App() {
           {label:"Method",key:"method"},
           {label:"Amount",render:r=><span className="font-semibold">{fmt(r.amount)}</span>},
           {label:"Status",render:r=>statusBadge(r.status)},
+          {label:"",render:r=>(
+            <button onClick={e=>{e.stopPropagation();printReceipt(r);}}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-orange-500 hover:bg-orange-50 border border-orange-200 transition-colors">
+              <Printer size={13}/>Receipt
+            </button>
+          )},
         ]} data={filtered}/>
       </div>
     );
@@ -1473,11 +1549,17 @@ export default function App() {
 
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-3 mb-4">
-          <label className="text-sm font-semibold text-gray-600">Filter by month:</label>
-          <input type="month" value={reportMonth} onChange={e=>setReportMonth(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-200"/>
-          <button onClick={()=>setReportMonth(today.slice(0,7))} className="text-xs text-orange-500 hover:underline">Reset</button>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-semibold text-gray-600">Month:</label>
+            <input type="month" value={reportMonth} onChange={e=>setReportMonth(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-200"/>
+            <button onClick={()=>setReportMonth(today.slice(0,7))} className="text-xs text-orange-500 hover:underline">Reset</button>
+          </div>
+          <button onClick={()=>printMonthlyReport(reportMonth,filteredPayments,totalRev,maintCost,util)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-orange-200 text-sm font-semibold text-orange-500 hover:bg-orange-50 transition-colors">
+            <Printer size={15}/>Print Monthly Report
+          </button>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard icon={DollarSign} label="Total Revenue" value={fmt(totalRev)} color="#16a34a"/>
@@ -1553,6 +1635,43 @@ export default function App() {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* Monthly Payments Breakdown */}
+        <div className="bg-white rounded-2xl p-5 border border-gray-100">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-sm text-gray-900" style={{fontFamily:"'Outfit', sans-serif"}}>
+              Payment Transactions — {reportMonth} ({filteredPayments.length} records)
+            </h3>
+            <button onClick={()=>printMonthlyReport(reportMonth,filteredPayments,totalRev,maintCost,util)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-orange-500 hover:bg-orange-50 border border-orange-200 transition-colors">
+              <Printer size={13}/>Print
+            </button>
+          </div>
+          {filteredPayments.length === 0 ? (
+            <div className="text-center py-10 text-gray-400 text-sm">No payments recorded for {reportMonth}</div>
+          ) : (
+            <Table cols={[
+              {label:"ID",render:r=><span className="font-mono text-xs">{r.id}</span>},
+              {label:"Date",key:"date"},
+              {label:"Customer",key:"customerName"},
+              {label:"Booking",key:"bookingId"},
+              {label:"Type",key:"type"},
+              {label:"Method",key:"method"},
+              {label:"Amount",render:r=><span className="font-bold text-gray-900">{fmt(r.amount)}</span>},
+              {label:"Status",render:r=>statusBadge(r.status)},
+              {label:"",render:r=>(
+                <button onClick={e=>{e.stopPropagation();printReceipt(r);}}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-orange-500 hover:bg-orange-50 border border-orange-200 transition-colors">
+                  <Printer size={12}/>Receipt
+                </button>
+              )},
+            ]} data={filteredPayments}/>
+          )}
+          <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center">
+            <span className="text-sm text-gray-500">{filteredPayments.length} transactions</span>
+            <span className="text-base font-bold text-gray-900">Total: <span style={{color:"#e2725b"}}>{fmt(totalRev)}</span></span>
           </div>
         </div>
       </div>
@@ -1740,10 +1859,10 @@ export default function App() {
         <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-white/95 backdrop-blur-xl border-t border-gray-100 flex items-stretch pb-safe">
           {[
             {id:"dashboard",label:"Home",icon:Home},
-            {id:"vehicles",label:"Vehicles",icon:Car},
             {id:"bookings",label:"Bookings",icon:Calendar},
             {id:"walkin",label:"Walk-in",icon:UserCheck},
             {id:"payments",label:"Payments",icon:CreditCard},
+            {id:"reports",label:"Reports",icon:BarChart3},
             {id:"more",label:"More",icon:Menu},
           ].map(tab=>{
             const Icon=tab.icon;
