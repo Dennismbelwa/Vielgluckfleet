@@ -435,6 +435,19 @@ export default function App() {
   };
 
   // ─── PRINT HELPERS ────────────────────────────────────────────
+  // Use hidden iframe so popup-blockers never interfere
+  const printHtml = (html) => {
+    const iframe = document.createElement('iframe');
+    Object.assign(iframe.style, { position:'fixed', right:'0', bottom:'0', width:'0', height:'0', border:'none', visibility:'hidden' });
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open(); doc.write(html); doc.close();
+    setTimeout(() => {
+      try { iframe.contentWindow.focus(); iframe.contentWindow.print(); }
+      finally { setTimeout(() => document.body.removeChild(iframe), 1000); }
+    }, 400);
+  };
+
   const printReceipt = (p) => {
     const booking = bookings.find(b=>b.id===p.bookingId);
     const html = `<!DOCTYPE html><html><head><title>Receipt ${p.id}</title>
@@ -469,9 +482,7 @@ export default function App() {
     <div class="total-row"><span style="font-size:14px;font-weight:700">Amount Paid</span><span class="total-val">${fmt(p.amount)}</span></div>
     <div class="footer">Thank you for choosing Viel Gl&#xFC;ck Car Hire<br>This is an official receipt &copy; ${new Date().getFullYear()} Viel Gl&#xFC;ck Car Hire &middot; Botswana</div>
     </body></html>`;
-    const w = window.open('','_blank','width=480,height=700');
-    w.document.write(html); w.document.close(); w.focus();
-    setTimeout(()=>{ w.print(); }, 400);
+    printHtml(html);
   };
 
   const printMonthlyReport = (reportMonth, filteredPmts, totalRev, maintCost, util) => {
@@ -499,9 +510,7 @@ export default function App() {
     <tbody>${rows||'<tr><td colspan="7" style="text-align:center;color:#aaa;padding:20px">No payments this month</td></tr>'}</tbody></table>
     <div class="footer">&copy; ${new Date().getFullYear()} Viel Gl&#xFC;ck Car Hire &middot; Botswana</div>
     </body></html>`;
-    const w = window.open('','_blank','width=900,height=700');
-    w.document.write(html); w.document.close(); w.focus();
-    setTimeout(()=>{ w.print(); }, 400);
+    printHtml(html);
   };
 
   // ─── CONTRACT HELPERS ─────────────────────────────────────────
@@ -590,9 +599,7 @@ export default function App() {
       ${sigBlock('Agent Signature &amp; Date', agentSig)}
     </div>
     </body></html>`;
-    const w = window.open('','_blank','width=900,height=800');
-    w.document.write(html); w.document.close(); w.focus();
-    setTimeout(()=>{ w.print(); }, 500);
+    printHtml(html);
   };
 
   // ─── MODAL SAVE FUNCTIONS ────────────────────────────────────
