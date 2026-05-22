@@ -347,10 +347,6 @@ export default function App() {
           <h2 className="text-lg font-bold text-gray-900" style={{fontFamily:"'Outfit', sans-serif"}}>{nav.find(n=>n.id===page)?.label || "Dashboard"}</h2>
           <p className="text-xs text-gray-400">{new Date().toLocaleDateString("en-BW",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</p>
         </div>
-        <div className="relative hidden sm:block">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300"/>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." className="pl-9 pr-4 py-2 text-sm rounded-xl bg-gray-50 border border-gray-100 w-56 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300"/>
-        </div>
         <div className="relative">
           <button className="relative p-2 rounded-xl hover:bg-orange-50 transition-colors" onClick={()=>setBellOpen(o=>!o)}>
             <Bell size={20} className={hasAlerts?"text-orange-400":"text-gray-400"}/>
