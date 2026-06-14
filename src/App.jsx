@@ -713,15 +713,25 @@ export default function App() {
       {name:"Maintenance",value:maint,color:"#f59e0b"},
     ].filter(d=>d.value>0);
 
-    const revByMonth = [
-      {month:"Jan",revenue:18500},{month:"Feb",revenue:22300},{month:"Mar",revenue:19800},
-      {month:"Apr",revenue:25600},{month:"May",revenue:totalRevenue},
-    ];
+    // Real revenue for the last 6 months, summed from payments
+    const revByMonth = (() => {
+      const now = new Date(today);
+      const months = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        months.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, month: d.toLocaleDateString("en-BW", { month: "short" }), revenue: 0 });
+      }
+      payments.forEach(p => {
+        const m = p.date && months.find(x => x.key === p.date.slice(0, 7));
+        if (m) m.revenue += (p.amount || 0);
+      });
+      return months.map(({ month, revenue }) => ({ month, revenue }));
+    })();
 
-    const topVehicles = [
-      {name:"Polo B 456",rentals:12},{name:"Demio B 123",rentals:10},{name:"Rio B 345",rentals:9},
-      {name:"Yaris B 012",rentals:8},{name:"Swift B 135",rentals:7},
-    ];
+    // Real most-rented vehicles, counted from bookings
+    const topVehicles = Object.entries(
+      bookings.reduce((acc, b) => { if (b.vehicleReg) acc[b.vehicleReg] = (acc[b.vehicleReg] || 0) + 1; return acc; }, {})
+    ).map(([name, rentals]) => ({ name, rentals })).sort((a, b) => b.rentals - a.rentals).slice(0, 5);
 
     return (
       <div className="space-y-6">
