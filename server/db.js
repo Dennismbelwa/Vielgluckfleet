@@ -51,6 +51,9 @@ db.exec(`
     emergency TEXT,
     nextOfKinName TEXT,
     nextOfKinContact TEXT,
+    physicalAddress TEXT,
+    workPlace TEXT,
+    workContact TEXT,
     notes TEXT,
     balance REAL DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
@@ -112,6 +115,12 @@ db.exec(`
     created_at TEXT DEFAULT (datetime('now'))
   );
 `);
+
+// ── Migrations: add newer columns to pre-existing databases ────
+for (const col of ['physicalAddress', 'workPlace', 'workContact']) {
+  const exists = db.prepare("SELECT COUNT(*) c FROM pragma_table_info('customers') WHERE name=?").get(col).c;
+  if (!exists) db.exec(`ALTER TABLE customers ADD COLUMN ${col} TEXT`);
+}
 
 // ── Seed if empty ──────────────────────────────────────────────
 

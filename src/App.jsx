@@ -161,6 +161,10 @@ const SignaturePad = ({ label, value, onChange }) => {
 const CO_INIT  = {mileage:"",fuel:"Empty",clean:true,damages:"",signature:false,photos:[],payAmount:"",payType:"Deposit",payMethod:"Cash"};
 const RET_INIT = {mileage:"",fuel:"Empty",clean:true,damages:"",smokeFee:false,stainFee:false,mudFee:false,photos:[],payAmount:"",payMethod:"Cash"};
 
+// Stable wrapper so the active page only remounts on navigation (keyed by page),
+// not on every App re-render — otherwise inputs lose focus on each keystroke.
+const Page = ({ render }) => render();
+
 // ─── MAIN APP ─────────────────────────────────────────────────
 export default function App() {
   const [page, setPage] = useState("dashboard");
@@ -328,8 +332,8 @@ export default function App() {
     ]},
     { title: "Hire", items: [
       { id:"walkin", label:"New Hire", icon:UserCheck },
-      { id:"bookings", label:"Bookings", icon:Calendar },
       { id:"checkout", label:"Hand Over", icon:ClipboardCheck },
+      { id:"bookings", label:"Bookings", icon:Calendar },
       { id:"returns", label:"Return Car", icon:RotateCcw },
     ]},
     { title: "Fleet", items: [
@@ -596,6 +600,9 @@ export default function App() {
         <div class="field"><p>Emergency Contact</p><p>${customer?.emergency||'—'}</p></div>
         <div class="field"><p>Next of Kin</p><p>${customer?.nextOfKinName||'—'}</p></div>
         <div class="field"><p>Next of Kin Contact</p><p>${customer?.nextOfKinContact||'—'}</p></div>
+        <div class="field"><p>Physical Address</p><p>${customer?.physicalAddress||'—'}</p></div>
+        <div class="field"><p>Work Place</p><p>${customer?.workPlace||'—'}</p></div>
+        <div class="field"><p>Work Contact</p><p>${customer?.workContact||'—'}</p></div>
       </div>
     </div>
     <div class="section"><div class="section-title">Vehicle Details</div>
@@ -1076,6 +1083,13 @@ export default function App() {
                 <AlertCircle size={16} className="text-amber-500"/><span className="text-sm text-amber-700 font-medium">Outstanding balance: {fmt(c.balance)}</span>
               </div>
             )}
+            {(c.physicalAddress || c.workPlace || c.workContact || c.emergency || c.nextOfKinName || c.nextOfKinContact) && (
+              <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {[["Physical Address",c.physicalAddress],["Work Place",c.workPlace],["Work Contact",c.workContact],["Emergency Contact",c.emergency],["Next of Kin",c.nextOfKinName],["Next of Kin Contact",c.nextOfKinContact]].map(([l,v])=>v?(
+                  <div key={l}><p className="text-xs text-gray-400">{l}</p><p className="text-sm font-medium text-gray-800">{v}</p></div>
+                ):null)}
+              </div>
+            )}
             {c.notes && <p className="mt-3 text-sm text-gray-500 italic">"{c.notes}"</p>}
           </div>
           <div className="bg-white rounded-2xl p-5 border border-gray-100">
@@ -1094,7 +1108,7 @@ export default function App() {
     return (
       <div className="space-y-4">
         <div className="flex justify-end">
-          <Btn onClick={()=>{setForm({name:"",phone:"",email:"",idNumber:"",license:"",emergency:"",nextOfKinName:"",nextOfKinContact:"",notes:""});setModal("customer");}}><Plus size={14} className="mr-1.5"/>Add Customer</Btn>
+          <Btn onClick={()=>{setForm({name:"",phone:"",email:"",idNumber:"",license:"",emergency:"",nextOfKinName:"",nextOfKinContact:"",physicalAddress:"",workPlace:"",workContact:"",notes:""});setModal("customer");}}><Plus size={14} className="mr-1.5"/>Add Customer</Btn>
         </div>
         <Table cols={[
           {label:"Name",render:r=><span className="font-semibold text-gray-900">{r.name}</span>},
@@ -1110,7 +1124,7 @@ export default function App() {
   // ─── WALK-IN WIZARD ─────────────────────────────────────────
   const WalkInPage = () => {
     const [step, setStep] = useState(1);
-    const [custForm, setCustForm] = useState({ name:"", phone:"", email:"", idNumber:"", license:"", emergency:"", nextOfKinName:"", nextOfKinContact:"", notes:"" });
+    const [custForm, setCustForm] = useState({ name:"", phone:"", email:"", idNumber:"", license:"", emergency:"", nextOfKinName:"", nextOfKinContact:"", physicalAddress:"", workPlace:"", workContact:"", notes:"" });
     const [custMode, setCustMode] = useState("new");   // "new" | "existing"
     const [existingId, setExistingId] = useState("");
     const [bookForm, setBookForm] = useState({ vehicleId:"", pickup:today, return:"", rate:300, tripType:"Local", deposit:500, payAmount:"", payType:"Deposit", payMethod:"Cash" });
@@ -1201,7 +1215,7 @@ export default function App() {
             <div className="flex gap-2">
               {[["new","New customer"],["existing","Existing customer"]].map(([m,l])=>(
                 <button key={m} type="button"
-                  onClick={()=>{ setCustMode(m); setErrors({}); if(m==="new"){ setExistingId(""); setCustForm({name:"",phone:"",email:"",idNumber:"",license:"",emergency:"",nextOfKinName:"",nextOfKinContact:"",notes:""}); } }}
+                  onClick={()=>{ setCustMode(m); setErrors({}); if(m==="new"){ setExistingId(""); setCustForm({name:"",phone:"",email:"",idNumber:"",license:"",emergency:"",nextOfKinName:"",nextOfKinContact:"",physicalAddress:"",workPlace:"",workContact:"",notes:""}); } }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${custMode===m?"bg-gray-900 text-white":"bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>{l}</button>
               ))}
             </div>
@@ -1247,7 +1261,11 @@ export default function App() {
                 <Field label="Emergency Contact"><Input value={custForm.emergency} onChange={e=>setCustForm({...custForm,emergency:e.target.value})}/></Field>
                 <Field label="Next of Kin Name"><Input value={custForm.nextOfKinName} onChange={e=>setCustForm({...custForm,nextOfKinName:e.target.value})}/></Field>
                 <Field label="Next of Kin Contact"><Input value={custForm.nextOfKinContact} onChange={e=>setCustForm({...custForm,nextOfKinContact:e.target.value})}/></Field>
-                <div/>
+                <div className="col-span-2">
+                  <Field label="Physical Address"><Input value={custForm.physicalAddress} onChange={e=>setCustForm({...custForm,physicalAddress:e.target.value})} placeholder="e.g. Plot 1234, Gaborone"/></Field>
+                </div>
+                <Field label="Work Place"><Input value={custForm.workPlace} onChange={e=>setCustForm({...custForm,workPlace:e.target.value})} placeholder="Employer / company"/></Field>
+                <Field label="Work Contact"><Input value={custForm.workContact} onChange={e=>setCustForm({...custForm,workContact:e.target.value})} placeholder="Work phone / email"/></Field>
                 <div className="col-span-2">
                   <Field label="Notes (optional)"><textarea value={custForm.notes} onChange={e=>setCustForm({...custForm,notes:e.target.value})} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-200 h-16 resize-none"/></Field>
                 </div>
@@ -1425,6 +1443,7 @@ export default function App() {
     const selected = coSelected;
     const setSelected = setCoSelected;
     const coBalance = selected ? (selected.total||0)-(selected.paid||0) : 0;
+    const coPayments = selected ? payments.filter(p=>p.bookingId===selected.id) : [];
 
     const processCheckOut = async () => {
       if (!selected) return;
@@ -1514,6 +1533,17 @@ export default function App() {
                     <p className="text-sm font-semibold text-gray-800">Collect Payment</p>
                     <span className="text-xs text-gray-500">Total {fmt(selected.total)} · Paid {fmt(selected.paid)} · Balance <b className={coBalance>0?"text-red-500":"text-green-600"}>{fmt(coBalance)}</b></span>
                   </div>
+                  {coPayments.length > 0 && (
+                    <div className="rounded-lg bg-green-50/70 border border-green-100 p-2.5 space-y-1">
+                      <p className="text-[11px] font-semibold text-green-700">Already collected at booking</p>
+                      {coPayments.map(p=>(
+                        <div key={p.id} className="flex items-center justify-between text-xs text-gray-600">
+                          <span>{p.type} · {p.method}{p.date?` · ${p.date}`:""}</span>
+                          <span className="font-semibold text-green-700">{fmt(p.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="grid sm:grid-cols-3 gap-3">
                     <Field label="Amount Now (BWP)"><Input type="number" value={co.payAmount} onChange={e=>setCo({...co,payAmount:e.target.value})} placeholder="0"/></Field>
                     <Field label="Type"><Select options={["Deposit","Rental"]} value={co.payType} onChange={e=>setCo({...co,payType:e.target.value})}/></Field>
@@ -1523,7 +1553,7 @@ export default function App() {
                     {selected.deposit>0 && <button type="button" onClick={()=>setCo({...co,payAmount:String(selected.deposit),payType:"Deposit"})} className="text-xs px-2.5 py-1 rounded-lg bg-white border border-gray-200 hover:border-orange-300 text-gray-600">Deposit {fmt(selected.deposit)}</button>}
                     {coBalance>0 && <button type="button" onClick={()=>setCo({...co,payAmount:String(coBalance),payType:"Rental"})} className="text-xs px-2.5 py-1 rounded-lg bg-white border border-gray-200 hover:border-orange-300 text-gray-600">Full balance {fmt(coBalance)}</button>}
                   </div>
-                  <p className="text-[11px] text-gray-400">Optional — leave at 0 to hand over without taking payment now.</p>
+                  <p className="text-[11px] text-gray-400">The amount collected at booking is already included in <b>Paid</b> above — no need to re-enter it. Only type here to collect the remaining balance now (or leave at 0).</p>
                 </div>
               </div>
               <div className="sm:col-span-2">
@@ -1573,6 +1603,9 @@ export default function App() {
           fuel: ret.fuel,
           clean: ret.clean,
           damages: ret.damages,
+          smokeFee: ret.smokeFee,
+          stainFee: ret.stainFee,
+          mudFee: ret.mudFee,
           penalties,
         });
         const amt = parseFloat(ret.payAmount) || 0;
@@ -2117,7 +2150,7 @@ export default function App() {
         <div className="lg:ml-64 min-h-screen flex flex-col">
           <Header/>
           <main className="flex-1 p-4 lg:p-6 overflow-x-hidden pb-20 lg:pb-0">
-            <PageComponent/>
+            <Page key={page} render={PageComponent}/>
           </main>
         </div>
         {/* ── MODALS rendered at App level so inputs never lose focus ── */}
@@ -2173,6 +2206,11 @@ export default function App() {
               <Field label="Emergency Contact"><Input value={form.emergency||""} onChange={e=>setForm({...form,emergency:e.target.value})}/></Field>
               <Field label="Next of Kin Name"><Input value={form.nextOfKinName||""} onChange={e=>setForm({...form,nextOfKinName:e.target.value})}/></Field>
               <Field label="Next of Kin Contact"><Input value={form.nextOfKinContact||""} onChange={e=>setForm({...form,nextOfKinContact:e.target.value})}/></Field>
+              <div className="col-span-2">
+                <Field label="Physical Address"><Input value={form.physicalAddress||""} onChange={e=>setForm({...form,physicalAddress:e.target.value})} placeholder="e.g. Plot 1234, Gaborone"/></Field>
+              </div>
+              <Field label="Work Place"><Input value={form.workPlace||""} onChange={e=>setForm({...form,workPlace:e.target.value})} placeholder="Employer / company"/></Field>
+              <Field label="Work Contact"><Input value={form.workContact||""} onChange={e=>setForm({...form,workContact:e.target.value})} placeholder="Work phone / email"/></Field>
               <div className="col-span-2">
                 <Field label="Notes"><textarea value={form.notes||""} onChange={e=>setForm({...form,notes:e.target.value})} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-200 h-20 resize-none"/></Field>
               </div>
@@ -2251,6 +2289,9 @@ export default function App() {
                       ["Emergency Contact", contractData.customer?.emergency],
                       ["Next of Kin", contractData.customer?.nextOfKinName],
                       ["Next of Kin Contact", contractData.customer?.nextOfKinContact],
+                      ["Physical Address", contractData.customer?.physicalAddress],
+                      ["Work Place", contractData.customer?.workPlace],
+                      ["Work Contact", contractData.customer?.workContact],
                     ].map(([l,v])=>(
                       <div key={l} className="bg-gray-50/70 rounded-xl p-3">
                         <p className="text-[10px] text-gray-400 uppercase tracking-wide">{l}</p>
