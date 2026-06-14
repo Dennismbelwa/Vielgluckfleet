@@ -151,6 +151,11 @@ const SignaturePad = ({ label, value, onChange }) => {
   );
 };
 
+// Initial state for the hire-flow forms. Lifted to App so they survive the
+// remount of page components on every App re-render (e.g. when the contract opens).
+const CO_INIT  = {mileage:"",fuel:"Empty",clean:true,damages:"",signature:false,photos:[],payAmount:"",payType:"Deposit",payMethod:"Cash"};
+const RET_INIT = {mileage:"",fuel:"Empty",clean:true,damages:"",smokeFee:false,stainFee:false,mudFee:false,photos:[],payAmount:"",payMethod:"Cash"};
+
 // ─── MAIN APP ─────────────────────────────────────────────────
 export default function App() {
   const [page, setPage] = useState("dashboard");
@@ -159,6 +164,7 @@ export default function App() {
   const [bookings, setBookings] = useState([]);
   const [maintenance, setMaintenance] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [inspectionLogs, setInspectionLogs] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(null);
@@ -173,6 +179,11 @@ export default function App() {
   const [loginShowPw, setLoginShowPw] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
+  // Hire-flow form state — lifted here so it persists across page-component remounts
+  const [coSelected, setCoSelected] = useState(null);
+  const [co, setCo] = useState(CO_INIT);
+  const [retSelected, setRetSelected] = useState(null);
+  const [ret, setRet] = useState(RET_INIT);
 
   // On mount: check for stored token
   useEffect(() => {
@@ -194,18 +205,20 @@ export default function App() {
 
   const loadAll = async () => {
     try {
-      const [v, c, b, p, m] = await Promise.all([
+      const [v, c, b, p, m, insp] = await Promise.all([
         api.getVehicles(),
         api.getCustomers(),
         api.getBookings(),
         api.getPayments(),
         api.getMaintenance(),
+        api.getInspections(),
       ]);
       setVehicles(v || []);
       setCustomers(c || []);
       setBookings(b || []);
       setPayments(p || []);
       setMaintenance(m || []);
+      setInspectionLogs(insp || []);
     } catch (err) {
       console.error("loadAll error:", err);
     }
@@ -303,22 +316,38 @@ export default function App() {
     );
   }
 
-  const nav = [
-    { id:"dashboard", label:"Dashboard", icon:Home },
-    { id:"vehicles", label:"Vehicles", icon:Car },
-    { id:"bookings", label:"Bookings", icon:Calendar },
-    { id:"customers", label:"Customers", icon:Users },
-    { id:"walkin", label:"Walk-in", icon:UserCheck },
-    { id:"checkout", label:"Hand Over", icon:ClipboardCheck },
-    { id:"returns", label:"Return Car", icon:RotateCcw },
-    { id:"inspection", label:"Inspections", icon:Shield },
-    { id:"payments", label:"Payments", icon:CreditCard },
-    { id:"maintenance", label:"Maintenance", icon:Wrench },
-    { id:"reports", label:"Reports", icon:BarChart3 },
-    { id:"settings", label:"Settings", icon:Settings },
+  // Sidebar grouped by the operator's journey rather than a flat list.
+  const navGroups = [
+    { title: null, items: [
+      { id:"dashboard", label:"Dashboard", icon:Home },
+    ]},
+    { title: "Hire", items: [
+      { id:"walkin", label:"New Hire", icon:UserCheck },
+      { id:"bookings", label:"Bookings", icon:Calendar },
+      { id:"checkout", label:"Hand Over", icon:ClipboardCheck },
+      { id:"returns", label:"Return Car", icon:RotateCcw },
+    ]},
+    { title: "Fleet", items: [
+      { id:"vehicles", label:"Vehicles", icon:Car },
+      { id:"inspection", label:"Inspections", icon:Shield },
+      { id:"maintenance", label:"Maintenance", icon:Wrench },
+    ]},
+    { title: "Customers & Finance", items: [
+      { id:"customers", label:"Customers", icon:Users },
+      { id:"payments", label:"Payments", icon:CreditCard },
+    ]},
+    { title: "Insights", items: [
+      { id:"reports", label:"Reports", icon:BarChart3 },
+      { id:"settings", label:"Settings", icon:Settings },
+    ]},
   ];
+  const nav = navGroups.flatMap(g => g.items);
 
-  const goTo = (p, d) => { setPage(p); setDetail(d||null); setSidebarOpen(false); setSearch(""); };
+  const goTo = (p, d) => {
+    setPage(p); setDetail(d||null); setSidebarOpen(false); setSearch("");
+    if (p === "checkout") { setCoSelected(d?.status === "Confirmed" ? d : null); setCo(CO_INIT); }
+    if (p === "returns")  { setRetSelected(d || null); setRet(RET_INIT); }
+  };
 
   // ─── SIDEBAR ────────────────────────────────────────────────
   const Sidebar = () => (
@@ -338,21 +367,26 @@ export default function App() {
           </div>
         </div>
         <nav className="flex-1 py-3 overflow-y-auto">
-          {nav.map(n => {
-            const Icon = n.icon;
-            const active = page === n.id;
-            return (
-              <button key={n.id} onClick={()=>goTo(n.id)}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-all mx-1 rounded-xl ${active ? "text-white" : "text-white/55 hover:text-white hover:bg-white/5"}`}
-                style={active?{background:"linear-gradient(135deg,rgba(226,114,91,0.25) 0%,rgba(212,165,116,0.15) 100%)",borderLeft:"3px solid #e2725b"}:{borderLeft:"3px solid transparent"}}>
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${active?"shadow-lg":"" }`}
-                  style={active?{background:"linear-gradient(135deg,#e2725b 0%,#d4a574 100%)",boxShadow:"0 4px 12px rgba(226,114,91,0.4)"}:{}}>
-                  <Icon size={16} color={active?"#fff":"currentColor"}/>
-                </div>
-                <span className={active?"font-semibold":""}>{n.label}</span>
-              </button>
-            );
-          })}
+          {navGroups.map((group, gi) => (
+            <div key={gi} className="mb-1">
+              {group.title && <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-[0.15em] text-white/30">{group.title}</p>}
+              {group.items.map(n => {
+                const Icon = n.icon;
+                const active = page === n.id;
+                return (
+                  <button key={n.id} onClick={()=>goTo(n.id)}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-all mx-1 rounded-xl ${active ? "text-white" : "text-white/55 hover:text-white hover:bg-white/5"}`}
+                    style={active?{background:"linear-gradient(135deg,rgba(226,114,91,0.25) 0%,rgba(212,165,116,0.15) 100%)",borderLeft:"3px solid #e2725b"}:{borderLeft:"3px solid transparent"}}>
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${active?"shadow-lg":"" }`}
+                      style={active?{background:"linear-gradient(135deg,#e2725b 0%,#d4a574 100%)",boxShadow:"0 4px 12px rgba(226,114,91,0.4)"}:{}}>
+                      <Icon size={16} color={active?"#fff":"currentColor"}/>
+                    </div>
+                    <span className={active?"font-semibold":""}>{n.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
         <div className="p-4 border-t border-white/10">
           <div className="flex items-center gap-3">
@@ -904,6 +938,25 @@ export default function App() {
     const BookingDetail = () => {
       const b = detail;
       const bPayments = payments.filter(p=>p.bookingId===b.id);
+      const [advancing, setAdvancing] = useState(false);
+      const confirmBooking = async () => {
+        setAdvancing(true);
+        try {
+          await api.updateBooking(b.id, { ...b, status: "Confirmed" });
+          await loadAll();
+          setDetail({ ...b, status: "Confirmed" });
+        } catch (err) {
+          alert("Error confirming booking: " + err.message);
+        } finally {
+          setAdvancing(false);
+        }
+      };
+      // Next action in the hire pipeline, keyed off status
+      const nextStep = {
+        Pending:   { label: advancing ? "Confirming…" : "Confirm Booking", icon: CheckCircle2, onClick: confirmBooking, variant: "primary" },
+        Confirmed: { label: "Hand Over Car", icon: ClipboardCheck, onClick: ()=>goTo("checkout", b), variant: "primary" },
+        Active:    { label: "Process Return", icon: RotateCcw, onClick: ()=>goTo("returns", b), variant: "success" },
+      }[b.status];
       return (
         <div className="space-y-6">
           <button onClick={()=>setDetail(null)} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700"><ArrowLeft size={16}/>Back to bookings</button>
@@ -917,8 +970,12 @@ export default function App() {
                 <p className="text-gray-400 text-sm">{b.customerName} · {b.vehicleReg}</p>
               </div>
               <div className="flex gap-2">
-                <Btn onClick={()=>{setForm(b);setModal("booking");}}><Edit size={14} className="mr-1.5"/>Edit</Btn>
-                {b.status==="Active" && <Btn variant="success" onClick={()=>goTo("returns",b)}><RotateCcw size={14} className="mr-1.5"/>Process Return</Btn>}
+                <Btn variant="secondary" onClick={()=>{setForm(b);setModal("booking");}}><Edit size={14} className="mr-1.5"/>Edit</Btn>
+                {nextStep && (
+                  <Btn variant={nextStep.variant} onClick={nextStep.onClick} className={advancing?"opacity-60 pointer-events-none":""}>
+                    {(()=>{const I=nextStep.icon; return <I size={14} className="mr-1.5"/>;})()}{nextStep.label}
+                  </Btn>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
@@ -956,7 +1013,7 @@ export default function App() {
             ))}
           </div>
           <div className="ml-auto">
-            <Btn onClick={()=>{setForm({customerId:"",vehicleId:"",pickup:"",return:"",rate:300,status:"Pending",deposit:500,tripType:"Local"});setModal("booking");}}><Plus size={14} className="mr-1.5"/>New Booking</Btn>
+            <Btn onClick={()=>goTo("walkin")}><Plus size={14} className="mr-1.5"/>New Booking</Btn>
           </div>
         </div>
         <Table cols={[
@@ -1039,9 +1096,10 @@ export default function App() {
   const WalkInPage = () => {
     const [step, setStep] = useState(1);
     const [custForm, setCustForm] = useState({ name:"", phone:"", email:"", idNumber:"", license:"", emergency:"", nextOfKinName:"", nextOfKinContact:"", notes:"" });
+    const [custMode, setCustMode] = useState("new");   // "new" | "existing"
+    const [existingId, setExistingId] = useState("");
     const [bookForm, setBookForm] = useState({ vehicleId:"", pickup:today, return:"", rate:300, tripType:"Local", deposit:500 });
     const [saving, setSaving] = useState(false);
-    const [done, setDone] = useState(false);
     const [errors, setErrors] = useState({});
 
     const selectedVehicle = vehicles.find(v=>v.id===bookForm.vehicleId);
@@ -1053,9 +1111,13 @@ export default function App() {
     const handleConfirm = async () => {
       setSaving(true);
       try {
-        // Create customer
-        const newCust = await api.createCustomer({...custForm, balance:0});
-        const custId = newCust.id || newCust.customer?.id;
+        let custId;
+        if (custMode === "existing" && existingId) {
+          custId = existingId;
+        } else {
+          const newCust = await api.createCustomer({...custForm, balance:0});
+          custId = newCust.id || newCust.customer?.id;
+        }
         // Create booking
         await api.createBooking({
           customerId: custId,
@@ -1072,29 +1134,17 @@ export default function App() {
           status: "Confirmed",
         });
         await loadAll();
-        setDone(true);
+        // Navigate to the bookings list on success. We avoid an in-component
+        // "done" screen because loadAll re-renders App and remounts this page,
+        // which would wipe local state like `done`.
+        goTo("bookings");
+        return;
       } catch (err) {
-        alert("Error creating walk-in booking: " + err.message);
+        alert("Error creating booking: " + err.message);
       } finally {
         setSaving(false);
       }
     };
-
-    if (done) {
-      return (
-        <div className="flex flex-col items-center justify-center py-20 space-y-4">
-          <div className="w-16 h-16 rounded-full flex items-center justify-center bg-green-100">
-            <CheckCircle2 size={36} className="text-green-600"/>
-          </div>
-          <h3 className="text-xl font-bold text-gray-900" style={{fontFamily:"'Outfit', sans-serif"}}>Walk-in Booking Created!</h3>
-          <p className="text-gray-400 text-sm">Customer and booking have been saved successfully.</p>
-          <div className="flex gap-3">
-            <Btn variant="secondary" onClick={()=>{ setStep(1); setCustForm({name:"",phone:"",email:"",idNumber:"",license:"",emergency:"",nextOfKinName:"",nextOfKinContact:"",notes:""}); setBookForm({vehicleId:"",pickup:today,return:"",rate:300,tripType:"Local",deposit:500}); setDone(false); }}>New Walk-in</Btn>
-            <Btn onClick={()=>goTo("bookings")}>View Bookings</Btn>
-          </div>
-        </div>
-      );
-    }
 
     const stepLabels = ["Customer Details","Vehicle & Dates","Review & Confirm"];
 
@@ -1127,40 +1177,73 @@ export default function App() {
         {/* Step 1: Customer Details */}
         {step === 1 && (
           <div className="bg-white rounded-2xl p-6 border border-gray-100 space-y-4">
-            <h3 className="font-bold text-gray-900" style={{fontFamily:"'Outfit', sans-serif"}}>Customer Details</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Full Name">
-                <Input value={custForm.name} onChange={e=>{setCustForm({...custForm,name:e.target.value});setErrors(p=>({...p,name:""}));}} placeholder="e.g. Tebogo Mosweu" className={errors.name?"border-red-400":""}/>
-                {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
-              </Field>
-              <Field label="Phone">
-                <Input value={custForm.phone} onChange={e=>{setCustForm({...custForm,phone:e.target.value});setErrors(p=>({...p,phone:""}));}} placeholder="+267 7xxx xxxx" className={errors.phone?"border-red-400":""}/>
-                {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
-              </Field>
-              <Field label="Email Address"><Input type="email" value={custForm.email} onChange={e=>setCustForm({...custForm,email:e.target.value})} placeholder="e.g. name@email.com"/></Field>
-              <Field label="ID / Passport No.">
-                <Input value={custForm.idNumber} onChange={e=>{setCustForm({...custForm,idNumber:e.target.value});setErrors(p=>({...p,idNumber:""}));}} className={errors.idNumber?"border-red-400":""}/>
-                {errors.idNumber && <p className="text-xs text-red-500 mt-1">{errors.idNumber}</p>}
-              </Field>
-              <Field label="Driver License No.">
-                <Input value={custForm.license} onChange={e=>{setCustForm({...custForm,license:e.target.value});setErrors(p=>({...p,license:""}));}} className={errors.license?"border-red-400":""}/>
-                {errors.license && <p className="text-xs text-red-500 mt-1">{errors.license}</p>}
-              </Field>
-              <Field label="Emergency Contact"><Input value={custForm.emergency} onChange={e=>setCustForm({...custForm,emergency:e.target.value})}/></Field>
-              <Field label="Next of Kin Name"><Input value={custForm.nextOfKinName} onChange={e=>setCustForm({...custForm,nextOfKinName:e.target.value})}/></Field>
-              <Field label="Next of Kin Contact"><Input value={custForm.nextOfKinContact} onChange={e=>setCustForm({...custForm,nextOfKinContact:e.target.value})}/></Field>
-              <div/>
-              <div className="col-span-2">
-                <Field label="Notes (optional)"><textarea value={custForm.notes} onChange={e=>setCustForm({...custForm,notes:e.target.value})} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-200 h-16 resize-none"/></Field>
-              </div>
+            <h3 className="font-bold text-gray-900" style={{fontFamily:"'Outfit', sans-serif"}}>Customer</h3>
+            <div className="flex gap-2">
+              {[["new","New customer"],["existing","Existing customer"]].map(([m,l])=>(
+                <button key={m} type="button"
+                  onClick={()=>{ setCustMode(m); setErrors({}); if(m==="new"){ setExistingId(""); setCustForm({name:"",phone:"",email:"",idNumber:"",license:"",emergency:"",nextOfKinName:"",nextOfKinContact:"",notes:""}); } }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${custMode===m?"bg-gray-900 text-white":"bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>{l}</button>
+              ))}
             </div>
+
+            {custMode === "existing" ? (
+              <div className="space-y-3">
+                <Field label="Select Customer">
+                  <Select
+                    options={[{value:"",label:"Choose customer..."},...customers.map(c=>({value:c.id,label:`${c.name}${c.phone?` · ${c.phone}`:""}`}))]}
+                    value={existingId}
+                    onChange={e=>{ const id=e.target.value; setExistingId(id); const c=customers.find(x=>x.id===id)||{}; setCustForm({name:c.name||"",phone:c.phone||"",email:c.email||"",idNumber:c.idNumber||"",license:c.license||"",emergency:c.emergency||"",nextOfKinName:c.nextOfKinName||"",nextOfKinContact:c.nextOfKinContact||"",notes:c.notes||""}); setErrors({}); }}
+                    className={errors.existing?"border-red-400":""}
+                  />
+                  {errors.existing && <p className="text-xs text-red-500 mt-1">{errors.existing}</p>}
+                </Field>
+                {existingId && (
+                  <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 grid grid-cols-2 gap-2">
+                    {[["Name",custForm.name],["Phone",custForm.phone],["ID / Passport",custForm.idNumber],["License",custForm.license]].map(([l,v])=>v?(
+                      <div key={l}><p className="text-xs text-gray-400">{l}</p><p className="text-sm font-semibold text-gray-800">{v}</p></div>
+                    ):null)}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Full Name">
+                  <Input value={custForm.name} onChange={e=>{setCustForm({...custForm,name:e.target.value});setErrors(p=>({...p,name:""}));}} placeholder="e.g. Tebogo Mosweu" className={errors.name?"border-red-400":""}/>
+                  {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
+                </Field>
+                <Field label="Phone">
+                  <Input value={custForm.phone} onChange={e=>{setCustForm({...custForm,phone:e.target.value});setErrors(p=>({...p,phone:""}));}} placeholder="+267 7xxx xxxx" className={errors.phone?"border-red-400":""}/>
+                  {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
+                </Field>
+                <Field label="Email Address"><Input type="email" value={custForm.email} onChange={e=>setCustForm({...custForm,email:e.target.value})} placeholder="e.g. name@email.com"/></Field>
+                <Field label="ID / Passport No.">
+                  <Input value={custForm.idNumber} onChange={e=>{setCustForm({...custForm,idNumber:e.target.value});setErrors(p=>({...p,idNumber:""}));}} className={errors.idNumber?"border-red-400":""}/>
+                  {errors.idNumber && <p className="text-xs text-red-500 mt-1">{errors.idNumber}</p>}
+                </Field>
+                <Field label="Driver License No.">
+                  <Input value={custForm.license} onChange={e=>{setCustForm({...custForm,license:e.target.value});setErrors(p=>({...p,license:""}));}} className={errors.license?"border-red-400":""}/>
+                  {errors.license && <p className="text-xs text-red-500 mt-1">{errors.license}</p>}
+                </Field>
+                <Field label="Emergency Contact"><Input value={custForm.emergency} onChange={e=>setCustForm({...custForm,emergency:e.target.value})}/></Field>
+                <Field label="Next of Kin Name"><Input value={custForm.nextOfKinName} onChange={e=>setCustForm({...custForm,nextOfKinName:e.target.value})}/></Field>
+                <Field label="Next of Kin Contact"><Input value={custForm.nextOfKinContact} onChange={e=>setCustForm({...custForm,nextOfKinContact:e.target.value})}/></Field>
+                <div/>
+                <div className="col-span-2">
+                  <Field label="Notes (optional)"><textarea value={custForm.notes} onChange={e=>setCustForm({...custForm,notes:e.target.value})} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-200 h-16 resize-none"/></Field>
+                </div>
+              </div>
+            )}
             <div className="flex justify-end pt-2">
               <Btn onClick={()=>{
                 const e={};
-                if (!custForm.name) e.name="Full name is required.";
-                if (!custForm.phone) e.phone="Phone is required.";
-                if (!custForm.idNumber) e.idNumber="ID/Passport number is required.";
-                if (!custForm.license) e.license="Driver license is required.";
+                if (custMode === "existing") {
+                  if (!existingId) e.existing="Please select a customer.";
+                } else {
+                  if (!custForm.name) e.name="Full name is required.";
+                  if (!custForm.phone) e.phone="Phone is required.";
+                  if (!custForm.idNumber) e.idNumber="ID/Passport number is required.";
+                  if (!custForm.license) e.license="Driver license is required.";
+                }
                 if (Object.keys(e).length>0) { setErrors(e); return; }
                 setErrors({});
                 setStep(2);
@@ -1272,12 +1355,17 @@ export default function App() {
   // ─── CHECK-OUT WORKFLOW ─────────────────────────────────────
   const CheckOutPage = () => {
     const activeBookings = bookings.filter(b=>b.status==="Confirmed");
-    const [selected, setSelected] = useState(null);
-    const [co, setCo] = useState({mileage:"",fuel:"Empty",clean:true,damages:"",signature:false,photos:[]});
+    const selected = coSelected;
+    const setSelected = setCoSelected;
+    const coBalance = selected ? (selected.total||0)-(selected.paid||0) : 0;
 
     const processCheckOut = async () => {
       if (!selected) return;
       try {
+        const amt = parseFloat(co.payAmount) || 0;
+        if (amt > 0) {
+          await api.createPayment({ bookingId: selected.id, amount: amt, type: co.payType, method: co.payMethod });
+        }
         await api.checkout(selected.id, {
           mileage: parseInt(co.mileage) || undefined,
           fuel: co.fuel,
@@ -1287,7 +1375,7 @@ export default function App() {
         });
         await loadAll();
         setSelected(null);
-        setCo({mileage:"",fuel:"Empty",clean:true,damages:"",signature:false,photos:[]});
+        setCo(CO_INIT);
       } catch (err) {
         alert("Error processing check-out: " + err.message);
       }
@@ -1354,6 +1442,24 @@ export default function App() {
                 </Field>
               </div>
               <div className="sm:col-span-2">
+                <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/60 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <p className="text-sm font-semibold text-gray-800">Collect Payment</p>
+                    <span className="text-xs text-gray-500">Total {fmt(selected.total)} · Paid {fmt(selected.paid)} · Balance <b className={coBalance>0?"text-red-500":"text-green-600"}>{fmt(coBalance)}</b></span>
+                  </div>
+                  <div className="grid sm:grid-cols-3 gap-3">
+                    <Field label="Amount Now (BWP)"><Input type="number" value={co.payAmount} onChange={e=>setCo({...co,payAmount:e.target.value})} placeholder="0"/></Field>
+                    <Field label="Type"><Select options={["Deposit","Rental"]} value={co.payType} onChange={e=>setCo({...co,payType:e.target.value})}/></Field>
+                    <Field label="Method"><Select options={["Cash","Card","Bank Transfer"]} value={co.payMethod} onChange={e=>setCo({...co,payMethod:e.target.value})}/></Field>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    {selected.deposit>0 && <button type="button" onClick={()=>setCo({...co,payAmount:String(selected.deposit),payType:"Deposit"})} className="text-xs px-2.5 py-1 rounded-lg bg-white border border-gray-200 hover:border-orange-300 text-gray-600">Deposit {fmt(selected.deposit)}</button>}
+                    {coBalance>0 && <button type="button" onClick={()=>setCo({...co,payAmount:String(coBalance),payType:"Rental"})} className="text-xs px-2.5 py-1 rounded-lg bg-white border border-gray-200 hover:border-orange-300 text-gray-600">Full balance {fmt(coBalance)}</button>}
+                  </div>
+                  <p className="text-[11px] text-gray-400">Optional — leave at 0 to hand over without taking payment now.</p>
+                </div>
+              </div>
+              <div className="sm:col-span-2">
                 <div className={`p-4 rounded-xl border-2 transition-all ${co.signature ? "border-green-300 bg-green-50/50" : "border-orange-200 bg-orange-50/30"}`}>
                   <div className="flex items-center justify-between flex-wrap gap-3">
                     <div>
@@ -1382,8 +1488,10 @@ export default function App() {
   // ─── RETURNS WORKFLOW ───────────────────────────────────────
   const ReturnsPage = () => {
     const activeRentals = bookings.filter(b=>b.status==="Active");
-    const [selected, setSelected] = useState(detail || null);
-    const [ret, setRet] = useState({mileage:"",fuel:"Empty",clean:true,damages:"",smokeFee:false,stainFee:false,mudFee:false,photos:[]});
+    const selected = retSelected;
+    const setSelected = setRetSelected;
+    const retPenalties = (!ret.clean?50:0)+(ret.smokeFee?200:0)+(ret.stainFee?150:0)+(ret.mudFee?100:0);
+    const retBalance = selected ? (selected.total||0)-(selected.paid||0)+retPenalties : 0;
 
     const processReturn = async () => {
       if (!selected) return;
@@ -1400,9 +1508,13 @@ export default function App() {
           damages: ret.damages,
           penalties,
         });
+        const amt = parseFloat(ret.payAmount) || 0;
+        if (amt > 0) {
+          await api.createPayment({ bookingId: selected.id, amount: amt, type: "Rental", method: ret.payMethod });
+        }
         await loadAll();
         setSelected(null);
-        setRet({mileage:"",fuel:"Empty",clean:true,damages:"",smokeFee:false,stainFee:false,mudFee:false,photos:[]});
+        setRet(RET_INIT);
         if (detail) setDetail(null);
       } catch (err) {
         alert("Error processing return: " + err.message);
@@ -1480,6 +1592,20 @@ export default function App() {
                   </label>
                 ))}
               </div>
+              <div className="sm:col-span-2">
+                <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/60 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <p className="text-sm font-semibold text-gray-800">Settle Payment</p>
+                    <span className="text-xs text-gray-500">Total {fmt(selected.total)} · Paid {fmt(selected.paid)}{retPenalties>0?` · Penalties ${fmt(retPenalties)}`:""} · Balance <b className={retBalance>0?"text-red-500":"text-green-600"}>{fmt(retBalance)}</b></span>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <Field label="Collect Now (BWP)"><Input type="number" value={ret.payAmount} onChange={e=>setRet({...ret,payAmount:e.target.value})} placeholder="0"/></Field>
+                    <Field label="Method"><Select options={["Cash","Card","Bank Transfer"]} value={ret.payMethod} onChange={e=>setRet({...ret,payMethod:e.target.value})}/></Field>
+                  </div>
+                  {retBalance>0 && <button type="button" onClick={()=>setRet({...ret,payAmount:String(retBalance)})} className="text-xs px-2.5 py-1 rounded-lg bg-white border border-gray-200 hover:border-orange-300 text-gray-600">Settle balance {fmt(retBalance)}</button>}
+                  <p className="text-[11px] text-gray-400">Penalties are billed automatically on return; collect the full balance here to close the rental clean.</p>
+                </div>
+              </div>
               <div className="sm:col-span-2 flex justify-end pt-3 border-t border-gray-100">
                 <Btn onClick={processReturn} className={`${!ret.mileage?"opacity-50 pointer-events-none":""}`}>
                   <CheckCircle2 size={14} className="mr-1.5"/>Complete Return
@@ -1495,20 +1621,26 @@ export default function App() {
   // ─── INSPECTION ─────────────────────────────────────────────
   const InspectionPage = () => {
     const areas = ["Front Bumper","Rear Bumper","Left Side","Right Side","Windshield","Tyres/Rims","Interior"];
+    const [showForm, setShowForm] = useState(false);
     const [selectedVehicle, setSelectedVehicle] = useState("");
     const [inspections, setInspections] = useState(areas.map(a=>({area:a,condition:"Good",severity:"None",notes:"",photos:[]})));
     const [saving, setSaving] = useState(false);
+    const vehReg = id => vehicles.find(v=>v.id===id)?.reg || id;
+    const typeMeta = { pre:{label:"Hand-over",cls:"bg-blue-100 text-blue-700"}, post:{label:"Return",cls:"bg-violet-100 text-violet-700"}, standalone:{label:"Manual",cls:"bg-gray-100 text-gray-600"} };
 
     const saveInspection = async () => {
       if (!selectedVehicle) return;
       setSaving(true);
       try {
+        const flagged = inspections.filter(c=>c.severity==="Minor"||c.severity==="Major");
         await api.createInspection({
           vehicleId: selectedVehicle,
-          date: today,
-          items: inspections,
+          type: "standalone",
+          areas: inspections,
+          notes: flagged.length ? flagged.map(c=>`${c.area}: ${c.severity}${c.notes?` (${c.notes})`:""}`).join("; ") : "No damage noted",
         });
-        alert("Inspection saved successfully.");
+        await loadAll();
+        setShowForm(false);
         setSelectedVehicle("");
         setInspections(areas.map(a=>({area:a,condition:"Good",severity:"None",notes:"",photos:[]})));
       } catch (err) {
@@ -1520,6 +1652,15 @@ export default function App() {
 
     return (
       <div className="space-y-6">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-gray-400">{inspectionLogs.length} inspection record(s) — auto-logged at hand-over &amp; return</p>
+          <Btn variant={showForm?"secondary":"primary"} onClick={()=>setShowForm(s=>!s)}>
+            {showForm ? "Close" : <><Plus size={14} className="mr-1.5"/>New Inspection</>}
+          </Btn>
+        </div>
+
+        {showForm && (
+        <>
         <div className="bg-white rounded-2xl p-5 border border-gray-100">
           <h3 className="font-bold text-sm text-gray-900 mb-4" style={{fontFamily:"'Outfit', sans-serif"}}>Vehicle Damage Inspection</h3>
           <Field label="Select Vehicle">
@@ -1577,6 +1718,24 @@ export default function App() {
             </div>
           </div>
         )}
+        </>
+        )}
+
+        {/* Inspection log — the system of record */}
+        <div className="bg-white rounded-2xl p-5 border border-gray-100">
+          <h3 className="font-bold text-sm text-gray-900 mb-4" style={{fontFamily:"'Outfit', sans-serif"}}>Inspection Log</h3>
+          {inspectionLogs.length === 0 ? (
+            <p className="text-gray-400 text-sm py-8 text-center">No inspections recorded yet. They are logged automatically when you hand over or return a vehicle.</p>
+          ) : (
+            <Table cols={[
+              {label:"Date", render:r=>(r.created_at||"").slice(0,10)},
+              {label:"Vehicle", render:r=>vehReg(r.vehicleId)},
+              {label:"Type", render:r=>{const m=typeMeta[r.type]||typeMeta.standalone; return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${m.cls}`}>{m.label}</span>;}},
+              {label:"Booking", render:r=>r.bookingId||"—"},
+              {label:"Notes", render:r=>r.notes||"—"},
+            ]} data={inspectionLogs}/>
+          )}
+        </div>
       </div>
     );
   };
@@ -2141,7 +2300,7 @@ export default function App() {
           {[
             {id:"dashboard",label:"Home",icon:Home},
             {id:"bookings",label:"Bookings",icon:Calendar},
-            {id:"walkin",label:"Walk-in",icon:UserCheck},
+            {id:"walkin",label:"New Hire",icon:UserCheck},
             {id:"payments",label:"Payments",icon:CreditCard},
             {id:"reports",label:"Reports",icon:BarChart3},
             {id:"more",label:"More",icon:Menu},

@@ -38,17 +38,26 @@ router.put('/:id', (req, res) => {
 
 // Checkout — mark Active, update vehicle status
 router.post('/:id/checkout', (req, res) => {
-  const { mileage } = req.body;
+  const { mileage, fuel, clean, damages } = req.body;
   const booking = db.prepare('SELECT * FROM bookings WHERE id=?').get(req.params.id);
   if (!booking) return res.status(404).json({ error: 'Booking not found' });
   db.prepare("UPDATE bookings SET status='Active' WHERE id=?").run(req.params.id);
   db.prepare("UPDATE vehicles SET status='Rented', location='Customer', mileage=? WHERE id=?").run(mileage || 0, booking.vehicleId);
+  // Record the hand-over inspection so it shows in the inspection log
+  const notes = [
+    mileage ? `${mileage} km` : null,
+    fuel ? `Fuel: ${fuel}` : null,
+    clean !== undefined ? (clean ? 'Clean' : 'Not clean') : null,
+    damages ? `Damages: ${damages}` : null,
+  ].filter(Boolean).join(' · ');
+  db.prepare('INSERT INTO inspections (vehicleId,bookingId,type,areas,notes) VALUES (?,?,?,?,?)')
+    .run(booking.vehicleId, booking.id, 'pre', JSON.stringify({ mileage: mileage || null, fuel: fuel || null, clean }), notes || 'Hand-over inspection');
   res.json({ ok: true });
 });
 
 // Return — mark Completed, update vehicle, create penalty payments
 router.post('/:id/return', (req, res) => {
-  const { mileage, clean, smokeFee, stainFee, mudFee } = req.body;
+  const { mileage, fuel, clean, damages, smokeFee, stainFee, mudFee } = req.body;
   const booking = db.prepare('SELECT * FROM bookings WHERE id=?').get(req.params.id);
   if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
@@ -74,6 +83,17 @@ router.post('/:id/return', (req, res) => {
 
   db.prepare("UPDATE bookings SET status='Completed', total=total+? WHERE id=?").run(penalties, req.params.id);
   db.prepare("UPDATE vehicles SET status='Available', location='Main Office', mileage=? WHERE id=?").run(mileage||0, booking.vehicleId);
+
+  // Record the return inspection so it shows in the inspection log
+  const notes = [
+    mileage ? `${mileage} km` : null,
+    fuel ? `Fuel: ${fuel}` : null,
+    clean !== undefined ? (clean ? 'Clean' : 'Not clean') : null,
+    damages ? `Damages: ${damages}` : null,
+    newPayments.length ? `Penalties: ${newPayments.map(p=>p.type).join(', ')}` : null,
+  ].filter(Boolean).join(' · ');
+  db.prepare('INSERT INTO inspections (vehicleId,bookingId,type,areas,notes) VALUES (?,?,?,?,?)')
+    .run(booking.vehicleId, booking.id, 'post', JSON.stringify({ mileage: mileage || null, fuel: fuel || null, clean, penalties: newPayments.map(p=>p.type) }), notes || 'Return inspection');
 
   res.json({ ok: true });
 });

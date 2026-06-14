@@ -16,8 +16,11 @@ const req = async (method, path, body) => {
     window.location.reload();
     return;
   }
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
+  // Tolerate empty bodies (e.g. 204/304 or a transient empty response) instead
+  // of letting res.json() throw "Unexpected end of JSON input".
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new Error((data && data.error) || 'Request failed');
   return data;
 };
 
