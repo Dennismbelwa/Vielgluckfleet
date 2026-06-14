@@ -6,6 +6,12 @@
       "runtimeExecutable": "bash",
       "runtimeArgs": ["-c", "export NVM_DIR=$HOME/.nvm && . $NVM_DIR/nvm.sh && npm run dev -- --port 5173"],
       "port": 5173
+    },
+    {
+      "name": "viel-gluck-api",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "export NVM_DIR=$HOME/.nvm && . $NVM_DIR/nvm.sh && node server/index.js"],
+      "port": 3001
     }
   ]
 }

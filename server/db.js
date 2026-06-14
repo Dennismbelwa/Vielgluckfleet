@@ -112,6 +112,10 @@ db.exec(`
 
 const seedIfEmpty = (table, count) => db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get().c === 0;
 
+// Demo fleet/customer/booking data only seeds when explicitly opted in via
+// SEED_DEMO=true. Login users are always seeded so a fresh install can sign in.
+const SEED_DEMO = process.env.SEED_DEMO === 'true';
+
 if (seedIfEmpty('users')) {
   const insert = db.prepare('INSERT INTO users (username,password,name,role) VALUES (?,?,?,?)');
   insert.run('admin',      bcrypt.hashSync('admin123',  10), 'Admin',          'Admin');
@@ -119,7 +123,7 @@ if (seedIfEmpty('users')) {
   insert.run('finance',    bcrypt.hashSync('finance123',10), 'Finance Officer', 'Finance');
 }
 
-if (seedIfEmpty('vehicles')) {
+if (SEED_DEMO && seedIfEmpty('vehicles')) {
   const ins = db.prepare(`INSERT INTO vehicles (id,reg,vin,make,model,year,type,color,mileage,motIssue,motExpiry,insuranceExpiry,status,location) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
   const vehicles = [
     ['V001','B 123 ABC','JM1DE1721G0123456','Mazda','Demio',2019,'Compact','White',87420,'2025-01-15','2026-01-15','2026-03-01','Available','Main Office'],
@@ -141,7 +145,7 @@ if (seedIfEmpty('vehicles')) {
   vehicles.forEach(v => ins.run(...v));
 }
 
-if (seedIfEmpty('customers')) {
+if (SEED_DEMO && seedIfEmpty('customers')) {
   const ins = db.prepare('INSERT INTO customers (id,name,phone,idNumber,license,emergency,notes,balance) VALUES (?,?,?,?,?,?,?,?)');
   [
     ['C001','Tebogo Mosweu','+267 7123 4567','539212345','DL-2019-4567','+267 7198 7654','Regular customer, always reliable',0],
@@ -153,7 +157,7 @@ if (seedIfEmpty('customers')) {
   ].forEach(c => ins.run(...c));
 }
 
-if (seedIfEmpty('bookings')) {
+if (SEED_DEMO && seedIfEmpty('bookings')) {
   const ins = db.prepare('INSERT INTO bookings (id,customerId,customerName,vehicleId,vehicleReg,pickup,returnDate,status,rate,total,deposit,paid,tripType) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)');
   [
     ['BK001','C001','Tebogo Mosweu','V002','B 456 DEF','2026-05-10','2026-05-17','Active',350,2450,1000,2450,'Local'],
@@ -166,7 +170,7 @@ if (seedIfEmpty('bookings')) {
   ].forEach(b => ins.run(...b));
 }
 
-if (seedIfEmpty('payments')) {
+if (SEED_DEMO && seedIfEmpty('payments')) {
   const ins = db.prepare('INSERT INTO payments (id,bookingId,customerId,customerName,amount,type,method,date,status) VALUES (?,?,?,?,?,?,?,?,?)');
   [
     ['P001','BK001','C001','Tebogo Mosweu',1000,'Deposit','Cash','2026-05-10','Completed'],
@@ -180,7 +184,7 @@ if (seedIfEmpty('payments')) {
   ].forEach(p => ins.run(...p));
 }
 
-if (seedIfEmpty('maintenance')) {
+if (SEED_DEMO && seedIfEmpty('maintenance')) {
   const ins = db.prepare('INSERT INTO maintenance (id,vehicleId,vehicleReg,type,date,cost,status,notes,nextDue) VALUES (?,?,?,?,?,?,?,?,?)');
   [
     ['M001','V003','B 789 GHI','Oil Service','2026-05-10',850,'In Progress','Full oil change + filter','2026-08-10'],

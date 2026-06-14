@@ -47,7 +47,12 @@ const Input = (props) => <input {...props} className={`w-full px-3 py-2 rounded-
 
 const Select = ({options, ...props}) => (
   <select {...props} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300 bg-white">
-    {options.map(o=><option key={o.value||o} value={o.value||o}>{o.label||o}</option>)}
+    {options.map((o,i)=>{
+      const isObj = o !== null && typeof o === "object";
+      const value = isObj ? o.value : o;
+      const label = isObj ? o.label : o;
+      return <option key={`${value}-${i}`} value={value}>{label}</option>;
+    })}
   </select>
 );
 
@@ -1098,7 +1103,7 @@ export default function App() {
     const [custForm, setCustForm] = useState({ name:"", phone:"", email:"", idNumber:"", license:"", emergency:"", nextOfKinName:"", nextOfKinContact:"", notes:"" });
     const [custMode, setCustMode] = useState("new");   // "new" | "existing"
     const [existingId, setExistingId] = useState("");
-    const [bookForm, setBookForm] = useState({ vehicleId:"", pickup:today, return:"", rate:300, tripType:"Local", deposit:500 });
+    const [bookForm, setBookForm] = useState({ vehicleId:"", pickup:today, return:"", rate:300, tripType:"Local", deposit:500, payAmount:"", payType:"Deposit", payMethod:"Cash" });
     const [saving, setSaving] = useState(false);
     const [errors, setErrors] = useState({});
 
@@ -1119,7 +1124,7 @@ export default function App() {
           custId = newCust.id || newCust.customer?.id;
         }
         // Create booking
-        await api.createBooking({
+        const bk = await api.createBooking({
           customerId: custId,
           customerName: custForm.name,
           vehicleId: bookForm.vehicleId,
@@ -1133,6 +1138,11 @@ export default function App() {
           paid: 0,
           status: "Confirmed",
         });
+        // Record any payment collected during the wizard's Payment step
+        const payAmt = parseFloat(bookForm.payAmount) || 0;
+        if (payAmt > 0 && bk?.id) {
+          await api.createPayment({ bookingId: bk.id, amount: payAmt, type: bookForm.payType, method: bookForm.payMethod });
+        }
         await loadAll();
         // Navigate to the bookings list on success. We avoid an in-component
         // "done" screen because loadAll re-renders App and remounts this page,
@@ -1146,7 +1156,7 @@ export default function App() {
       }
     };
 
-    const stepLabels = ["Customer Details","Vehicle & Dates","Review & Confirm"];
+    const stepLabels = ["Customer Details","Vehicle & Dates","Payment","Review & Confirm"];
 
     return (
       <div className="max-w-2xl mx-auto space-y-6">
@@ -1301,13 +1311,46 @@ export default function App() {
                 if (Object.keys(e).length>0) { setErrors(e); return; }
                 setErrors({});
                 setStep(3);
-              }}>Next: Review <ChevronRight size={14} className="ml-1"/></Btn>
+              }}>Next: Payment <ChevronRight size={14} className="ml-1"/></Btn>
             </div>
           </div>
         )}
 
-        {/* Step 3: Review & Confirm */}
+        {/* Step 3: Payment */}
         {step === 3 && (
+          <div className="bg-white rounded-2xl p-6 border border-gray-100 space-y-4">
+            <h3 className="font-bold text-gray-900" style={{fontFamily:"'Outfit', sans-serif"}}>Payment</h3>
+            <div className="p-3 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-between flex-wrap gap-2">
+              <span className="text-sm text-gray-500">{days} day(s) × {fmt(bookForm.rate)} · Deposit {fmt(bookForm.deposit)}</span>
+              <span className="text-sm text-gray-600">Total <b className="text-gray-900">{fmt(total)}</b></span>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Amount Collected Now (BWP)"><Input type="number" value={bookForm.payAmount} onChange={e=>setBookForm({...bookForm,payAmount:e.target.value})} placeholder="0"/></Field>
+              <Field label="Type"><Select options={["Deposit","Rental"]} value={bookForm.payType} onChange={e=>setBookForm({...bookForm,payType:e.target.value})}/></Field>
+              <Field label="Method"><Select options={["Cash","Card","Bank Transfer"]} value={bookForm.payMethod} onChange={e=>setBookForm({...bookForm,payMethod:e.target.value})}/></Field>
+              <div className="flex items-end">
+                <div className="flex gap-2 flex-wrap">
+                  {bookForm.deposit>0 && <button type="button" onClick={()=>setBookForm({...bookForm,payAmount:String(bookForm.deposit),payType:"Deposit"})} className="text-xs px-2.5 py-1 rounded-lg bg-white border border-gray-200 hover:border-orange-300 text-gray-600">Deposit {fmt(bookForm.deposit)}</button>}
+                  {total>0 && <button type="button" onClick={()=>setBookForm({...bookForm,payAmount:String(total),payType:"Rental"})} className="text-xs px-2.5 py-1 rounded-lg bg-white border border-gray-200 hover:border-orange-300 text-gray-600">Full {fmt(total)}</button>}
+                </div>
+              </div>
+            </div>
+            {(()=>{const amt=parseFloat(bookForm.payAmount)||0; const bal=total-amt; return (
+              <div className="p-3 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-between">
+                <span className="text-sm text-orange-700">Collecting now: {fmt(amt)}</span>
+                <span className="font-bold text-orange-700">Balance after: {fmt(bal)}</span>
+              </div>
+            );})()}
+            <p className="text-[11px] text-gray-400">Optional — leave at 0 to book without taking payment now; you can still collect at Hand Over.</p>
+            <div className="flex justify-between pt-2">
+              <Btn variant="secondary" onClick={()=>setStep(2)}>Back</Btn>
+              <Btn onClick={()=>setStep(4)}>Next: Review <ChevronRight size={14} className="ml-1"/></Btn>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Review & Confirm */}
+        {step === 4 && (
           <div className="bg-white rounded-2xl p-6 border border-gray-100 space-y-5">
             <h3 className="font-bold text-gray-900" style={{fontFamily:"'Outfit', sans-serif"}}>Review & Confirm</h3>
 
@@ -1338,12 +1381,26 @@ export default function App() {
                   ))}
                 </div>
               </div>
+
+              <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Payment</p>
+                {(()=>{const amt=parseFloat(bookForm.payAmount)||0; const bal=total-amt; return (
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      ["Collected Now", amt>0 ? `${fmt(amt)} (${bookForm.payType}, ${bookForm.payMethod})` : "Nothing yet"],
+                      ["Balance After", fmt(bal)],
+                    ].map(([l,v])=>(
+                      <div key={l}><p className="text-xs text-gray-400">{l}</p><p className="text-sm font-semibold text-gray-800">{v}</p></div>
+                    ))}
+                  </div>
+                );})()}
+              </div>
             </div>
 
             <div className="flex justify-between pt-2">
-              <Btn variant="secondary" onClick={()=>setStep(2)}>Back</Btn>
+              <Btn variant="secondary" onClick={()=>setStep(3)}>Back</Btn>
               <Btn onClick={handleConfirm} className={saving?"opacity-60 pointer-events-none":""}>
-                <CheckCircle2 size={14} className="mr-1.5"/>{saving ? "Saving…" : "Confirm Walk-in Booking"}
+                <CheckCircle2 size={14} className="mr-1.5"/>{saving ? "Saving…" : "Confirm Booking"}
               </Btn>
             </div>
           </div>
