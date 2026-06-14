@@ -1,10 +1,15 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const db = new Database(path.join(__dirname, 'fleet.db'));
+// Store the database in DATA_DIR when set (e.g. a mounted Railway volume) so it
+// survives redeploys; fall back to the server directory for local development.
+const dataDir = process.env.DATA_DIR || __dirname;
+fs.mkdirSync(dataDir, { recursive: true });
+const db = new Database(path.join(dataDir, 'fleet.db'));
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
