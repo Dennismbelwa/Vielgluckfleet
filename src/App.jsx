@@ -618,7 +618,9 @@ export default function App() {
     <div class="section"><div class="section-title">Rental Terms</div>
       <div class="grid2">
         <div class="field"><p>Pick-up Date</p><p>${booking?.pickup||'—'}</p></div>
+        <div class="field"><p>Pick-up Time</p><p>${booking?.pickupTime||'—'}</p></div>
         <div class="field"><p>Return Date</p><p>${booking?.returnDate||booking?.return||'—'}</p></div>
+        <div class="field"><p>Return Time</p><p>${booking?.pickupTime||'—'}</p></div>
         <div class="field"><p>Daily Rate</p><p>${fmt(booking?.rate)}</p></div>
         <div class="field"><p>Total Amount</p><p>${fmt(booking?.total)}</p></div>
         <div class="field"><p>Deposit Paid</p><p>${fmt(booking?.deposit)}</p></div>
@@ -1001,7 +1003,7 @@ export default function App() {
               </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-              {[["Pickup",b.pickup],["Return",b.return],["Daily Rate",fmt(b.rate)],["Total",fmt(b.total)],["Deposit",fmt(b.deposit)],["Paid",fmt(b.paid)],["Balance",fmt((b.total||0)-(b.paid||0))],["Trip",b.tripType]].map(([l,val])=>(
+              {[["Pickup",b.pickup],["Pickup Time",b.pickupTime||'—'],["Return",b.return],["Return Time",b.pickupTime||'—'],["Daily Rate",fmt(b.rate)],["Total",fmt(b.total)],["Deposit",fmt(b.deposit)],["Paid",fmt(b.paid)],["Balance",fmt((b.total||0)-(b.paid||0))],["Trip",b.tripType]].map(([l,val])=>(
                 <div key={l}><p className="text-xs text-gray-400">{l}</p><p className="text-sm font-semibold text-gray-800 mt-0.5">{val}</p></div>
               ))}
             </div>
@@ -1127,7 +1129,7 @@ export default function App() {
     const [custForm, setCustForm] = useState({ name:"", phone:"", email:"", idNumber:"", license:"", emergency:"", nextOfKinName:"", nextOfKinContact:"", physicalAddress:"", workPlace:"", workContact:"", notes:"" });
     const [custMode, setCustMode] = useState("new");   // "new" | "existing"
     const [existingId, setExistingId] = useState("");
-    const [bookForm, setBookForm] = useState({ vehicleId:"", pickup:today, return:"", rate:300, tripType:"Local", deposit:500, payAmount:"", payType:"Deposit", payMethod:"Cash" });
+    const [bookForm, setBookForm] = useState({ vehicleId:"", pickup:today, pickupTime:"", return:"", rate:300, tripType:"Local", deposit:500, payAmount:"", payType:"Deposit", payMethod:"Cash" });
     const [saving, setSaving] = useState(false);
     const [errors, setErrors] = useState({});
 
@@ -1154,6 +1156,7 @@ export default function App() {
           vehicleId: bookForm.vehicleId,
           vehicleReg: selectedVehicle?.reg || "",
           pickup: bookForm.pickup,
+          pickupTime: bookForm.pickupTime || null,
           return: bookForm.return,
           rate: bookForm.rate,
           tripType: bookForm.tripType,
@@ -1309,6 +1312,10 @@ export default function App() {
               <Field label="Pickup Date">
                 <Input type="date" value={bookForm.pickup} onChange={e=>{setBookForm({...bookForm,pickup:e.target.value});setErrors(p=>({...p,pickup:""}));}} className={errors.pickup?"border-red-400":""}/>
                 {errors.pickup && <p className="text-xs text-red-500 mt-1">{errors.pickup}</p>}
+              </Field>
+              <Field label="Pickup Time">
+                <Input type="time" value={bookForm.pickupTime} onChange={e=>setBookForm({...bookForm,pickupTime:e.target.value})}/>
+                <p className="text-xs text-gray-400 mt-1">Return time will match this time</p>
               </Field>
               <Field label="Return Date">
                 <Input type="date" value={bookForm.return} onChange={e=>{setBookForm({...bookForm,return:e.target.value});setErrors(p=>({...p,returnDate:""}));}} className={errors.returnDate?"border-red-400":""}/>
@@ -2183,6 +2190,7 @@ export default function App() {
               <Field label="Customer"><Select options={[{value:"",label:"Select..."},...customers.map(c=>({value:c.id,label:c.name}))]} value={form.customerId||""} onChange={e=>setForm({...form,customerId:e.target.value})}/></Field>
               <Field label="Vehicle"><Select options={[{value:"",label:"Select..."},...vehicles.filter(v=>v.status==="Available"||v.id===form.vehicleId).map(v=>({value:v.id,label:`${v.make} ${v.model} (${v.reg})`}))]} value={form.vehicleId||""} onChange={e=>setForm({...form,vehicleId:e.target.value})}/></Field>
               <Field label="Pickup Date"><Input type="date" value={form.pickup||""} onChange={e=>setForm({...form,pickup:e.target.value})}/></Field>
+              <Field label="Pickup Time"><Input type="time" value={form.pickupTime||""} onChange={e=>setForm({...form,pickupTime:e.target.value})}/></Field>
               <Field label="Return Date"><Input type="date" value={form.return||""} onChange={e=>setForm({...form,return:e.target.value})}/></Field>
               <Field label="Daily Rate (BWP)"><Input type="number" value={form.rate||""} onChange={e=>setForm({...form,rate:parseInt(e.target.value)})}/></Field>
               <Field label="Trip Type"><Select options={["Local","Intercity","Cross-border"]} value={form.tripType||"Local"} onChange={e=>setForm({...form,tripType:e.target.value})}/></Field>
@@ -2327,7 +2335,9 @@ export default function App() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {[
                       ["Pick-up Date", contractData.booking?.pickup],
+                      ["Pick-up Time", contractData.booking?.pickupTime||'—'],
                       ["Return Date", contractData.booking?.returnDate||contractData.booking?.return],
+                      ["Return Time", contractData.booking?.pickupTime||'—'],
                       ["Trip Type", contractData.booking?.tripType||'Local'],
                       ["Daily Rate", fmt(contractData.booking?.rate)],
                       ["Total Amount", fmt(contractData.booking?.total)],

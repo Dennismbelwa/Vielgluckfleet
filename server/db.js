@@ -66,6 +66,7 @@ db.exec(`
     vehicleId TEXT NOT NULL,
     vehicleReg TEXT,
     pickup TEXT,
+    pickupTime TEXT,
     returnDate TEXT,
     status TEXT DEFAULT 'Pending',
     rate REAL,
@@ -120,6 +121,10 @@ db.exec(`
 for (const col of ['physicalAddress', 'workPlace', 'workContact']) {
   const exists = db.prepare("SELECT COUNT(*) c FROM pragma_table_info('customers') WHERE name=?").get(col).c;
   if (!exists) db.exec(`ALTER TABLE customers ADD COLUMN ${col} TEXT`);
+}
+{
+  const exists = db.prepare("SELECT COUNT(*) c FROM pragma_table_info('bookings') WHERE name='pickupTime'").get().c;
+  if (!exists) db.exec(`ALTER TABLE bookings ADD COLUMN pickupTime TEXT`);
 }
 
 // ── Seed if empty ──────────────────────────────────────────────

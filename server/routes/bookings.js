@@ -19,9 +19,9 @@ router.post('/', (req, res) => {
   const veh  = db.prepare('SELECT reg FROM vehicles WHERE id=?').get(b.vehicleId);
   const days = Math.max(1, Math.ceil((new Date(b.return) - new Date(b.pickup)) / 86400000));
   const total = days * (b.rate || 0);
-  db.prepare(`INSERT INTO bookings (id,customerId,customerName,vehicleId,vehicleReg,pickup,returnDate,status,rate,total,deposit,paid,tripType)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .run(id, b.customerId, cust?.name||b.customerName||'', b.vehicleId, veh?.reg||b.vehicleReg||'', b.pickup, b.return, b.status||'Pending', b.rate, total, b.deposit||0, 0, b.tripType||'Local');
+  db.prepare(`INSERT INTO bookings (id,customerId,customerName,vehicleId,vehicleReg,pickup,pickupTime,returnDate,status,rate,total,deposit,paid,tripType)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(id, b.customerId, cust?.name||b.customerName||'', b.vehicleId, veh?.reg||b.vehicleReg||'', b.pickup, b.pickupTime||null, b.return, b.status||'Pending', b.rate, total, b.deposit||0, 0, b.tripType||'Local');
   res.json({ ...db.prepare('SELECT * FROM bookings WHERE id=?').get(id), return: b.return });
 });
 
@@ -31,8 +31,8 @@ router.put('/:id', (req, res) => {
   const veh  = db.prepare('SELECT reg FROM vehicles WHERE id=?').get(b.vehicleId);
   const days = Math.max(1, Math.ceil((new Date(b.return) - new Date(b.pickup)) / 86400000));
   const total = days * (b.rate || 0);
-  db.prepare(`UPDATE bookings SET customerId=?,customerName=?,vehicleId=?,vehicleReg=?,pickup=?,returnDate=?,status=?,rate=?,total=?,deposit=?,paid=?,tripType=? WHERE id=?`)
-    .run(b.customerId, cust?.name||b.customerName||'', b.vehicleId, veh?.reg||b.vehicleReg||'', b.pickup, b.return, b.status, b.rate, total, b.deposit, b.paid??0, b.tripType, req.params.id);
+  db.prepare(`UPDATE bookings SET customerId=?,customerName=?,vehicleId=?,vehicleReg=?,pickup=?,pickupTime=?,returnDate=?,status=?,rate=?,total=?,deposit=?,paid=?,tripType=? WHERE id=?`)
+    .run(b.customerId, cust?.name||b.customerName||'', b.vehicleId, veh?.reg||b.vehicleReg||'', b.pickup, b.pickupTime||null, b.return, b.status, b.rate, total, b.deposit, b.paid??0, b.tripType, req.params.id);
   res.json({ ...db.prepare('SELECT * FROM bookings WHERE id=?').get(req.params.id), return: b.return });
 });
 
