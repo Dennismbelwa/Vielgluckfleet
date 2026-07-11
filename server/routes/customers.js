@@ -5,29 +5,29 @@ import { requireAuth } from '../middleware/auth.js';
 const router = Router();
 router.use(requireAuth);
 
-router.get('/', (req, res) => {
-  res.json(db.prepare('SELECT * FROM customers ORDER BY name').all());
+router.get('/', async (req, res) => {
+  res.json(await db.all('SELECT * FROM customers ORDER BY name'));
 });
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const c = req.body;
-  const last = db.prepare("SELECT id FROM customers WHERE id LIKE 'C%' ORDER BY id DESC LIMIT 1").get();
+  const last = await db.get("SELECT id FROM customers WHERE id LIKE 'C%' ORDER BY id DESC LIMIT 1");
   const nextNum = last ? parseInt(last.id.slice(1)) + 1 : 1;
   const id = `C${String(nextNum).padStart(3, '0')}`;
-  db.prepare('INSERT INTO customers (id,name,phone,email,idNumber,license,emergency,nextOfKinName,nextOfKinContact,physicalAddress,workPlace,workContact,notes,balance) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-    .run(id, c.name, c.phone, c.email||'', c.idNumber, c.license, c.emergency, c.nextOfKinName||'', c.nextOfKinContact||'', c.physicalAddress||'', c.workPlace||'', c.workContact||'', c.notes||'', 0);
-  res.json(db.prepare('SELECT * FROM customers WHERE id = ?').get(id));
+  await db.run('INSERT INTO customers (id,name,phone,email,"idNumber",license,emergency,"nextOfKinName","nextOfKinContact","physicalAddress","workPlace","workContact",notes,balance) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    [id, c.name, c.phone, c.email||'', c.idNumber, c.license, c.emergency, c.nextOfKinName||'', c.nextOfKinContact||'', c.physicalAddress||'', c.workPlace||'', c.workContact||'', c.notes||'', 0]);
+  res.json(await db.get('SELECT * FROM customers WHERE id = ?', [id]));
 });
 
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const c = req.body;
-  db.prepare('UPDATE customers SET name=?,phone=?,email=?,idNumber=?,license=?,emergency=?,nextOfKinName=?,nextOfKinContact=?,physicalAddress=?,workPlace=?,workContact=?,notes=?,balance=? WHERE id=?')
-    .run(c.name, c.phone, c.email||'', c.idNumber, c.license, c.emergency, c.nextOfKinName||'', c.nextOfKinContact||'', c.physicalAddress||'', c.workPlace||'', c.workContact||'', c.notes, c.balance??0, req.params.id);
-  res.json(db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id));
+  await db.run('UPDATE customers SET name=?,phone=?,email=?,"idNumber"=?,license=?,emergency=?,"nextOfKinName"=?,"nextOfKinContact"=?,"physicalAddress"=?,"workPlace"=?,"workContact"=?,notes=?,balance=? WHERE id=?',
+    [c.name, c.phone, c.email||'', c.idNumber, c.license, c.emergency, c.nextOfKinName||'', c.nextOfKinContact||'', c.physicalAddress||'', c.workPlace||'', c.workContact||'', c.notes, c.balance??0, req.params.id]);
+  res.json(await db.get('SELECT * FROM customers WHERE id = ?', [req.params.id]));
 });
 
-router.delete('/:id', (req, res) => {
-  db.prepare('DELETE FROM customers WHERE id = ?').run(req.params.id);
+router.delete('/:id', async (req, res) => {
+  await db.run('DELETE FROM customers WHERE id = ?', [req.params.id]);
   res.json({ ok: true });
 });
 

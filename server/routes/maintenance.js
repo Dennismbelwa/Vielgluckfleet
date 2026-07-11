@@ -5,31 +5,31 @@ import { requireAuth } from '../middleware/auth.js';
 const router = Router();
 router.use(requireAuth);
 
-router.get('/', (req, res) => {
-  res.json(db.prepare('SELECT * FROM maintenance ORDER BY date DESC').all());
+router.get('/', async (req, res) => {
+  res.json(await db.all('SELECT * FROM maintenance ORDER BY date DESC'));
 });
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const m = req.body;
-  const last = db.prepare("SELECT id FROM maintenance WHERE id LIKE 'M%' ORDER BY id DESC LIMIT 1").get();
+  const last = await db.get("SELECT id FROM maintenance WHERE id LIKE 'M%' ORDER BY id DESC LIMIT 1");
   const nextNum = last ? parseInt(last.id.slice(1)) + 1 : 1;
   const id = `M${String(nextNum).padStart(3,'0')}`;
-  const veh = db.prepare('SELECT reg FROM vehicles WHERE id=?').get(m.vehicleId);
-  db.prepare('INSERT INTO maintenance (id,vehicleId,vehicleReg,type,date,cost,status,notes,nextDue) VALUES (?,?,?,?,?,?,?,?,?)')
-    .run(id, m.vehicleId, veh?.reg||'', m.type, m.date, m.cost||0, m.status||'Scheduled', m.notes||'', m.nextDue||null);
-  res.json(db.prepare('SELECT * FROM maintenance WHERE id=?').get(id));
+  const veh = await db.get('SELECT reg FROM vehicles WHERE id=?', [m.vehicleId]);
+  await db.run('INSERT INTO maintenance (id,"vehicleId","vehicleReg",type,date,cost,status,notes,"nextDue") VALUES (?,?,?,?,?,?,?,?,?)',
+    [id, m.vehicleId, veh?.reg||'', m.type, m.date, m.cost||0, m.status||'Scheduled', m.notes||'', m.nextDue||null]);
+  res.json(await db.get('SELECT * FROM maintenance WHERE id=?', [id]));
 });
 
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const m = req.body;
-  const veh = db.prepare('SELECT reg FROM vehicles WHERE id=?').get(m.vehicleId);
-  db.prepare('UPDATE maintenance SET vehicleId=?,vehicleReg=?,type=?,date=?,cost=?,status=?,notes=?,nextDue=? WHERE id=?')
-    .run(m.vehicleId, veh?.reg||m.vehicleReg||'', m.type, m.date, m.cost, m.status, m.notes, m.nextDue||null, req.params.id);
-  res.json(db.prepare('SELECT * FROM maintenance WHERE id=?').get(req.params.id));
+  const veh = await db.get('SELECT reg FROM vehicles WHERE id=?', [m.vehicleId]);
+  await db.run('UPDATE maintenance SET "vehicleId"=?,"vehicleReg"=?,type=?,date=?,cost=?,status=?,notes=?,"nextDue"=? WHERE id=?',
+    [m.vehicleId, veh?.reg||m.vehicleReg||'', m.type, m.date, m.cost, m.status, m.notes, m.nextDue||null, req.params.id]);
+  res.json(await db.get('SELECT * FROM maintenance WHERE id=?', [req.params.id]));
 });
 
-router.delete('/:id', (req, res) => {
-  db.prepare('DELETE FROM maintenance WHERE id=?').run(req.params.id);
+router.delete('/:id', async (req, res) => {
+  await db.run('DELETE FROM maintenance WHERE id=?', [req.params.id]);
   res.json({ ok: true });
 });
 

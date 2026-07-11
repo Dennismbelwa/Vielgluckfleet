@@ -17,6 +17,7 @@ dist-ssr
 server/fleet.db
 *.db-shm
 *.db-wal
+export.json
 
 # Editor directories and files
 .vscode/*
