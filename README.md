@@ -1,16 +1,33 @@
-# React + Vite
+# Viel Glück Fleet Manager
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Car-hire fleet management app: Vite + React frontend, Express API, Postgres (Supabase).
 
-Currently, two official plugins are available:
+## Local development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```
+npm install
+npm run dev:server   # Express API on :3001 (needs DATABASE_URL in .env)
+npm run dev          # Vite on :5173, proxies /api → :3001
+```
 
-## React Compiler
+`.env` needs `DATABASE_URL` (Postgres connection string) and `JWT_SECRET` — see `.env.example`.
+For a fresh database: run `supabase/migrations/0001_init.sql`, then `node scripts/seed-users.mjs`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Deployment (Vercel + Supabase)
 
-## Expanding the ESLint configuration
+- Frontend is built by Vercel's Vite preset and served from CDN; the whole Express
+  API runs as a single serverless function (`api/index.js`), routed via `vercel.json`.
+- Vercel env vars (Production + Preview): `DATABASE_URL` (Supabase **transaction
+  pooler** string, port 6543) and `JWT_SECRET`.
+- Database schema lives in `supabase/migrations/0001_init.sql` — run it once in the
+  Supabase SQL editor for a new project.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Migrating data from the old Railway deployment
+
+1. Deploy the `railway-export` branch to Railway (adds a temporary authenticated
+   `GET /api/export` endpoint to the old SQLite build).
+2. `curl -H "Authorization: Bearer <token>" https://<railway-app>/api/export > export.json`
+3. `SUPABASE_DB_URL='<direct 5432 connection string>' node scripts/import-to-supabase.mjs export.json`
+   — imports all tables in FK order, preserves IDs, resets identity sequences, and
+   prints per-table row counts to compare.
+4. Smoke-check the Vercel deployment, point users/DNS at it, then retire Railway.
