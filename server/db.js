@@ -1,10 +1,29 @@
 import pg from 'pg';
-import 'dotenv/config';
+import fs from 'fs';
+import { config } from 'dotenv';
+
+// .env.local (synced from Vercel via `vercel env pull`) wins over .env
+config({ path: '.env.local', quiet: true });
+config({ quiet: true });
 
 // Connect through the Supabase transaction pooler (port 6543). PgBouncer in
 // transaction mode forbids named prepared statements — plain pool.query is fine.
+// POSTGRES_URL is what the Vercel Marketplace integration auto-provisions.
+// Supabase's TLS chain is signed by its own root CA, so verify against the
+// pinned CA cert. The URL's sslmode param must be dropped or it overrides the
+// explicit ssl config and fails against pg's default trust store.
+export const supabaseTls = (urlString) => {
+  if (!/\.supabase\.(co|com)/.test(urlString || '')) return { connectionString: urlString };
+  const url = new URL(urlString);
+  url.searchParams.delete('sslmode');
+  return {
+    connectionString: url.toString(),
+    ssl: { ca: fs.readFileSync(new URL('./supabase-ca.crt', import.meta.url)).toString() },
+  };
+};
+
 const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
+  ...supabaseTls(process.env.DATABASE_URL || process.env.POSTGRES_URL),
   max: 3,
   idleTimeoutMillis: 30_000,
 });
