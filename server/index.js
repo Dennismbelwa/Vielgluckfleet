@@ -4,6 +4,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import 'dotenv/config';
 
+import db from './db.js';
+import { requireAuth } from './middleware/auth.js';
 import authRouter        from './routes/auth.js';
 import vehiclesRouter    from './routes/vehicles.js';
 import customersRouter   from './routes/customers.js';
@@ -28,6 +30,16 @@ app.use('/api/inspections', inspectionsRouter);
 
 // Health check
 app.get('/api/health', (_, res) => res.json({ ok: true, ts: new Date().toISOString() }));
+
+// TEMPORARY: full-database export for the Supabase migration. Deploy this
+// branch to Railway, download the snapshot, then delete the branch.
+//   curl -H "Authorization: Bearer <token>" https://<railway-app>/api/export > export.json
+app.get('/api/export', requireAuth, (_, res) => {
+  const tables = ['users', 'vehicles', 'customers', 'bookings', 'payments', 'maintenance', 'inspections'];
+  const out = {};
+  for (const t of tables) out[t] = db.prepare(`SELECT * FROM ${t}`).all();
+  res.json(out);
+});
 
 // Serve Vite build in production
 if (process.env.NODE_ENV === 'production') {
