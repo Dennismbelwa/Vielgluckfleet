@@ -11,6 +11,7 @@
 
 import pg from 'pg';
 import fs from 'fs';
+import { supabaseTls } from '../server/db.js';
 
 const TABLES = ['users', 'vehicles', 'customers', 'bookings', 'payments', 'maintenance', 'inspections'];
 
@@ -39,11 +40,16 @@ const fixTimestamp = (v) =>
   typeof v === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(v) ? `${v}Z` : v;
 
 const data = await loadData();
-const client = new pg.Client({ connectionString: dbUrl });
+const client = new pg.Client(supabaseTls(dbUrl));
 await client.connect();
 
 try {
   await client.query('BEGIN');
+
+  // Replace any pre-existing rows (e.g. seeded default users) so imported
+  // rows keep their original IDs. Runs inside the transaction: a failed
+  // import rolls back to the pre-import state.
+  await client.query(`TRUNCATE ${TABLES.join(', ')} RESTART IDENTITY CASCADE`);
 
   for (const table of TABLES) {
     const rows = data[table] || [];
